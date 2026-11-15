@@ -1,129 +1,146 @@
 name: Build iOS
 
 # iOS 只能由 macOS 上的 Xcode 编译，所以用 GitHub 的 macOS runner。
-#
-# 产出是**未签名**的 .ipa —— CI 上没有开发者证书。在 Windows 上用 Sideloadly
-# 之类工具自签后装到 iPhone。免费 Apple ID 签的 App 每 7 天过期，重签一次即可。
+# 产出是**未签名**的 .ipa，在 Windows 上用 Sideloadly 之类工具自签后装到 iPhone。
 on:
-  workflow_dispatch:        # 手动触发：Actions 页面点 Run workflow
+  workflow_dispatch:
   push:
-    tags: ["v*"]            # 打 tag 时自动构建
+    tags: ["v*"]
 
 jobs:
   build:
-    # 可选标签（截至 2026-11，见 actions/runner-images）：
-    #   macos-15 / macos-26 / macos-latest → arm64
-    #   macos-15-intel / macos-26-intel    → x64
-    # macos-13 已下线，macos-14 已废弃。
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
-      - name: 安装 Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: ios/package-lock.json
 
-      - name: 安装 Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-ios
 
-      # Xcode 的脚本阶段调用 cargo，需要 ~/.cargo/bin 在 PATH 上
-      - name: 把 cargo 加入 PATH
+      # Xcode 的 Build Rust Code 脚本阶段调用 cargo，需要它在 PATH 上
+      - name: cargo PATH
         run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
-      - name: 缓存 Cargo
-        uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
         with:
           workspaces: ios/src-tauri -> target
 
-      - name: 安装 CocoaPods
-        run: |
-          brew install cocoapods
-          pod --version
+      - name: CocoaPods
+        run: brew install cocoapods
 
-      - name: 安装前端依赖
+      - name: npm ci
         working-directory: ios
         run: npm ci
 
-      - name: 生成 iOS 工程骨架
+      - name: tauri ios init
         working-directory: ios
-        # 首次生成后请把 src-tauri/gen/apple/ 提交回仓库，之后这步可跳过
         run: npx tauri ios init --ci
 
       # ------------------------------------------------------------------
-      # 关键说明：为什么必须用 `tauri ios build` 而不是直接 xcodebuild
+      # 关键一步：关闭代码签名
       #
-      # Tauri 生成的 Xcode 工程里有一个 "Build Rust Code" 脚本阶段，它内部执行的是
-      #   npx tauri ios xcode-script ...
-      # 而这个子命令需要读取 gen/apple/.tauri/cli-options-server.json ——
-      # 那个文件由**父进程** `tauri ios build` 在构建期间创建。
+      # `tauri ios build` 会让 xcodebuild 在编译阶段就检查签名身份，
+      # CI 上没有证书 → "Signing requires a development team" → 失败。
+      # Tauri CLI 没有暴露「跳过签名」的开关，但它生成的是标准 Xcode 工程，
+      # 所以直接改 project.pbxproj 的 buildSettings 即可。
       #
-      # 所以我们直接调 xcodebuild 必然失败：
-      #   failed to read .../.tauri/cli-options-server.json:
-      #   the `tauri ios dev` or `tauri ios build` command must be running
-      #
-      # 正确做法：让 Tauri 自己驱动 xcodebuild。代价是最后一步「导出 ipa」会
-      # 因为缺少签名证书而失败 —— 但那时 .app 已经编译好了，
-      # 我们手动把那个 .app 打成 ipa 即可（unzip/zip 结构本来就是 Payload/App.app）。
+      # 为什么不能绕开 `tauri ios build` 直接调 xcodebuild：
+      # 工程里的 "Build Rust Code" 脚本会执行 `tauri ios xcode-script`，
+      # 该子命令要从 gen/apple/.tauri/cli-options-server.json 读选项 ——
+      # 那个文件只由父进程 `tauri ios build` 在构建期间创建。
+      # 没有父进程就必然报 "command must be running"。
       # ------------------------------------------------------------------
-      - name: 编译（Tauri 驱动，容忍最后的签名导出失败）
+      - name: 关闭 Xcode 代码签名
+        working-directory: ios/src-tauri/gen/apple
+        run: |
+          python3 - <<'PY'
+          import re, pathlib
+
+          pbx = pathlib.Path("salarytool_ios.xcodeproj/project.pbxproj")
+          text = pbx.read_text()
+
+          # 每个 target 的每个 build configuration 都有 buildSettings = {...}
+          # 在开头注入关闭签名的三项。Pods 等子工程同样适用，无害。
+          inject = (
+              "\n\t\t\t\tCODE_SIGNING_ALLOWED = NO;"
+              "\n\t\t\t\tCODE_SIGNING_REQUIRED = NO;"
+              "\n\t\t\t\tCODE_SIGN_IDENTITY = \"\";"
+              "\n\t\t\t\tDEVELOPMENT_TEAM = \"\";"
+              "\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"\";"
+          )
+
+          count = text.count("buildSettings = {")
+          text = text.replace("buildSettings = {", "buildSettings = {" + inject)
+
+          # 如果工程里带了 CODE_SIGN_STYLE = Automatic，改 Manual 免得 Xcode 再要团队
+          text = text.replace("CODE_SIGN_STYLE = Automatic;", "CODE_SIGN_STYLE = Manual;")
+
+          pbx.write_text(text)
+          print(f"patched {count} buildSettings blocks")
+          PY
+          grep -c "CODE_SIGNING_ALLOWED = NO" salarytool_ios.xcodeproj/project.pbxproj
+
+      - name: 构建前端
+        working-directory: ios
+        run: npm run build
+
+      # Tauri 驱动 Xcode。最后一步导出 ipa 会因为没签名失败，
+      # 但那之前 .app 已经编译完成 —— 我们容忍退出码，只检查产物。
+      - name: tauri ios build
         id: build
         working-directory: ios
         run: |
           set +e
-          npx tauri ios build --debug --target aarch64 --ci 2>&1 | tee /tmp/ios-build.log
+          npx tauri ios build --debug --target aarch64 --ci 2>&1 | tee "$RUNNER_TEMP/ios-build.log"
           STATUS=${PIPESTATUS[0]}
           echo "tauri ios build 退出码: $STATUS"
 
-          APP=$(find src-tauri/gen/apple/build -name "*.app" -type d -path "*iphoneos*" 2>/dev/null | head -1)
+          APP=$(find src-tauri/gen/apple "$HOME/Library/Developer/Xcode/DerivedData" \
+                  -name "*.app" -type d -path "*iphoneos*" 2>/dev/null | head -1)
+
           if [ -z "$APP" ]; then
-            echo "::error::没有产出 .app —— 构建在编译阶段就失败了，看上面的日志"
-            tail -60 /tmp/ios-build.log
+            echo "::error::没有产出 .app"
+            grep -E "error:|Error |FAILED|PhaseScriptExecution" "$RUNNER_TEMP/ios-build.log" | head -40
             exit 1
           fi
           echo "找到 .app: $APP"
           echo "APP=$APP" >> "$GITHUB_ENV"
 
       - name: 检查产物
-        working-directory: ios
         run: |
           set -euo pipefail
-          echo "=== .app 结构 ==="
-          ls -la "$APP"
-          echo "=== Bundle ID / 版本 ==="
-          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c "Print :MinimumOSVersion" "$APP/Info.plist"
-          echo "=== 可执行文件 ==="
-          file "$APP"/SalaryTool 2>/dev/null || file "$APP"/*
+          echo "Bundle ID: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
+          echo "版本:      $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")"
+          echo "最低系统:  $(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/Info.plist")"
+          echo "可执行文件: $(file -b "$APP/SalaryTool")"
+          du -sh "$APP"
 
-      - name: 打包成未签名 ipa
-        working-directory: ios
+      - name: 打包 ipa
         run: |
           set -euo pipefail
-          rm -rf Payload out && mkdir -p Payload out
-          cp -R "$APP" Payload/
-          zip -qry out/SalaryTool-unsigned.ipa Payload
-          ls -lh out/SalaryTool-unsigned.ipa
-          echo "IPA=ios/out/SalaryTool-unsigned.ipa" >> "$GITHUB_ENV"
+          rm -rf "$RUNNER_TEMP/Payload" ios/out
+          mkdir -p "$RUNNER_TEMP/Payload" ios/out
+          cp -R "$APP" "$RUNNER_TEMP/Payload/"
+          (cd "$RUNNER_TEMP" && zip -qry -r "$GITHUB_WORKSPACE/ios/out/SalaryTool-unsigned.ipa" Payload)
+          ls -lh ios/out/SalaryTool-unsigned.ipa
 
-      - name: 上传产物
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: SalaryTool-unsigned-ipa
           path: ios/out/SalaryTool-unsigned.ipa
           if-no-files-found: error
           retention-days: 30
 
-      - name: 上传构建日志（排查用）
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
           name: ios-build-log
-          path: /tmp/ios-build.log
+          path: ${{ runner.temp }}/ios-build.log
           retention-days: 7
           if-no-files-found: ignore
