@@ -11,12 +11,10 @@ on:
 
 jobs:
   build:
-    # 可选的 macOS runner（截至 2026-11，见 actions/runner-images）：
-    #   macos-15 / macos-26 / macos-latest  → arm64，当前主力
-    #   macos-15-intel / macos-26-intel     → x64
-    #   macos-14                            → 已废弃，macos-13 已下线
-    # 之前用 macos-14 报的 "macos-14-arm64-us-default is not supported"
-    # 是镜像调度问题：该标签在这类账号上解析到了不可用的配置。
+    # 可选标签（截至 2026-11，见 actions/runner-images）：
+    #   macos-15 / macos-26 / macos-latest → arm64
+    #   macos-15-intel / macos-26-intel    → x64
+    # macos-13 已下线，macos-14 已废弃。
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +30,12 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-ios
+
+      # Xcode 的 "Build Rust Code" 脚本阶段会调用 cargo。
+      # 它继承的是当前 step 的环境变量，而 rustup 装的 cargo 在 ~/.cargo/bin，
+      # 默认不在 PATH 里 —— 上一次构建就是卡在这里（PhaseScriptExecution 失败）。
+      - name: 把 cargo 加入 PATH
+        run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
       - name: 缓存 Cargo
         uses: Swatinem/rust-cache@v2
@@ -57,32 +61,40 @@ jobs:
         working-directory: ios
         run: npm run build
 
-      - name: 列出 Xcode scheme
+      # 先把 Rust 静态库单独编出来：这一步失败的话错误信息比 Xcode 脚本阶段清楚得多
+      - name: 预编译 Rust 静态库（iOS）
+        working-directory: ios/src-tauri
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.cargo/bin:$PATH"
+          cargo build --lib --release --target aarch64-apple-ios
+          ls -lh target/aarch64-apple-ios/release/*.a
+
+      - name: 列出 scheme
         id: scheme
         working-directory: ios/src-tauri/gen/apple
         run: |
           set -euo pipefail
-          echo "=== 目录内容 ==="
+          echo "=== 目录 ==="
           ls -la
-          echo "=== 可用的 workspace / project ==="
-          find . -maxdepth 2 -name "*.xcworkspace" -o -maxdepth 2 -name "*.xcodeproj" | sort
-          # 找到 workspace 里的 scheme 名
-          WS=$(find . -maxdepth 2 -name "*.xcworkspace" | head -1)
-          echo "workspace=$WS" >> "$GITHUB_OUTPUT"
-          SCHEME=$(xcodebuild -workspace "$WS" -list 2>/dev/null \
+          echo "=== project / workspace ==="
+          find . -maxdepth 2 \( -name "*.xcworkspace" -o -name "*.xcodeproj" \) | sort
+          SCHEME=$(xcodebuild -project salarytool_ios.xcodeproj -list 2>/dev/null \
             | sed -n '/Schemes:/,$p' | tail -n +2 | head -1 | xargs)
           echo "scheme=$SCHEME" >> "$GITHUB_OUTPUT"
           echo "选中的 scheme: $SCHEME"
 
-      - name: 编译（关闭签名）
+      # 用 build 而不是 archive：不需要 .xcarchive，直接拿 .app 更省事，
+      # 也少一层签名/归档校验。
+      - name: 编译 App（关闭签名）
         working-directory: ios/src-tauri/gen/apple
         env:
-          WS: ${{ steps.scheme.outputs.workspace }}
           SCHEME: ${{ steps.scheme.outputs.scheme }}
         run: |
           set -euo pipefail
+          export PATH="$HOME/.cargo/bin:$PATH"
           xcodebuild \
-            -workspace "$WS" \
+            -project salarytool_ios.xcodeproj \
             -scheme "$SCHEME" \
             -configuration Release \
             -sdk iphoneos \
@@ -92,28 +104,28 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGN_ENTITLEMENTS="" \
-            archive
+            build
 
       - name: 打包成未签名 ipa
         working-directory: ios/src-tauri/gen/apple
         run: |
           set -euo pipefail
-          APP=$(find build -name "*.app" -type d -path "*Release-iphoneos*" | head -1)
+          APP=$(find build/Build/Products -name "*.app" -type d | head -1)
           if [ -z "$APP" ]; then
-            echo "没找到 .app，下面是 build 目录结构："
-            find build -maxdepth 5 -type d | head -40
+            echo "没找到 .app，下面是 Products 目录："
+            find build/Build/Products -maxdepth 3 | head -40
             exit 1
           fi
           echo "APP=$APP"
-          rm -rf Payload && mkdir -p Payload
+          rm -rf Payload out && mkdir -p Payload out
           cp -R "$APP" Payload/
-          zip -qry SalaryTool-unsigned.ipa Payload
-          ls -lh SalaryTool-unsigned.ipa
+          zip -qry out/SalaryTool-unsigned.ipa Payload
+          ls -lh out/SalaryTool-unsigned.ipa
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
           name: SalaryTool-unsigned-ipa
-          path: ios/src-tauri/gen/apple/SalaryTool-unsigned.ipa
+          path: ios/src-tauri/gen/apple/out/SalaryTool-unsigned.ipa
           if-no-files-found: error
           retention-days: 30
