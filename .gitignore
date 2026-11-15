@@ -7,22 +7,35 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# 依赖与构建产物
 node_modules
 dist
 dist-ssr
 *.local
 
-# 构建产物：exe 作为 GitHub Release 附件分发，不提交进仓库
-/release/
-/salarytool.exe
+# 两套外壳各自的构建产物
+win/release/
+win/salarytool.exe
+ios/src-tauri/gen/apple/build/
+ios/build/
 
 # 个人工资备份，含真实数据，绝不提交
+win/configs/salarytool-backup-*.json
+win/configs/*.private.json
 configs/salarytool-backup-*.json
-configs/*.private.json
 
 # Cargo
 src-tauri/target
-src-tauri/gen
+*/src-tauri/target
+win/src-tauri/gen
+ios/src-tauri/gen
+
+# iOS 签名相关（含证书与描述文件，绝不提交）
+*.p12
+*.mobileprovision
+*.cer
+ios/src-tauri/gen/apple/*.xcworkspace/xcuserdata/
+ios/src-tauri/gen/apple/**/xcuserdata/
 
 # Editor directories and files
 .vscode/*

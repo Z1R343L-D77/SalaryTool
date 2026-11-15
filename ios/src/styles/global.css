@@ -1,0 +1,931 @@
+/* ===========================================================
+   Liquid Glass · 暗色
+   多层半透明玻璃、镜面高光、同心圆角、内容在玻璃下滚动。
+   =========================================================== */
+
+/* —— 字体：随包内嵌，避免回落到微软雅黑合成粗体 —— */
+
+/*
+ * Inter 负责拉丁字母与数字：有真正的等宽数字（tnum）和光学尺寸轴（opsz），
+ * 大号金额会自动切到显示级字重比例，比等比放大的正文数字更挺。
+ * 只保留了项目实际用到的字符集（拉丁 + 常用符号），约 80 KB。
+ */
+@font-face {
+  font-family: "Inter Var";
+  src: url("../assets/fonts/Inter-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
+
+/*
+ * Noto Sans SC 负责中文。内嵌的理由不是好看，是稳定：
+ * 微软雅黑在 11–12px 下勾边发虚，且没有 500/600 字重，
+ * 浏览器只能拿 400 去合成粗体，糊成一团。
+ * 子集取了「界面全部文字 + GB2312 一级字库」，约 990 KB，
+ * 覆盖用户自填的收入项名称；更生僻的字会回落到系统字体，不会出现方块。
+ */
+@font-face {
+  font-family: "Noto Sans SC Var";
+  src: url("../assets/fonts/NotoSansSC-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
+
+:root {
+  color-scheme: dark;
+
+  /*
+   * 字号缩放：外观设置里的「字号」直接改这个系数，
+   * 下面所有 --fs-* 都用 calc() 乘它，改一处全界面生效。
+   */
+  --fs-scale: 1;
+
+  /*
+   * —— 字体族 ——
+   * iOS 上 SF Pro + 苹方是系统自带的高质量可变字体，字重齐全、还有
+   * Dynamic Type 的字距微调，比内嵌 Inter 更贴合系统。所以这里优先走系统字体，
+   * 内嵌的 Inter 只作为小数点等窄字形的补充（金额里的数字用得上）。
+   */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
+    "Inter Var", system-ui, sans-serif;
+  /* 仅用于代码 / JSON 编辑区 */
+  --font-mono: ui-monospace, "SF Mono", Menlo, "Cascadia Mono", monospace;
+
+  /* —— 字号：11px 是下限，中文在这个尺寸以下开始看不清笔画 —— */
+  --fs-display: calc(34px * var(--fs-scale));   /* 实发到手 */
+  --fs-title: calc(22px * var(--fs-scale));     /* 页面主标题 */
+  --fs-heading: calc(15px * var(--fs-scale));   /* 卡片标题 */
+  --fs-subhead: calc(14px * var(--fs-scale));   /* 区块标题、次级大数字 */
+  --fs-body: calc(13px * var(--fs-scale));      /* 正文、输入框 */
+  --fs-label: calc(12px * var(--fs-scale));     /* 字段名、表头 */
+  --fs-caption: calc(11.5px * var(--fs-scale)); /* 说明、辅助信息 */
+  --fs-micro: calc(11px * var(--fs-scale));     /* 日历格子等极密区域，不再往下 */
+
+  /* —— 字重：只用三档真字重，杜绝浏览器合成粗体 —— */
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+
+  /*
+   * —— 字距：跟着字号反向走 ——
+   * 大字收紧才紧凑，小字放开才好认；原来所有尺寸一律 +0.02em，大标题反而被撑散了。
+   */
+  --ls-display: -0.028em;
+  --ls-title: -0.02em;
+  --ls-heading: -0.012em;
+  --ls-body: -0.004em;
+  --ls-label: 0.004em;
+  --ls-caption: 0.012em;
+  --ls-micro: 0.02em;
+
+  /* —— 行高 —— */
+  --lh-display: 1.06;
+  --lh-title: 1.2;
+  --lh-heading: 1.35;
+  --lh-body: 1.5;
+
+  /* —— 同心圆角：内层 = 外层 − 内边距 —— */
+  --radius-window: 18px;
+  --radius-panel: 16px;
+  --radius-card: 14px;
+  --radius-control: 10px;
+  --radius-sm: 8px;
+  --radius-pill: 999px;
+
+  /* —— 触摸目标 —— iOS HIG 要求最小 44pt，指针设备可以小一些 */
+  --tap-min: 44px;
+
+  /* —— 动效：只改颜色与不透明度 —— */
+  --transition: color 200ms ease-out, background-color 200ms ease-out,
+    border-color 200ms ease-out, box-shadow 200ms ease-out, opacity 200ms ease-out;
+
+  /* —— 壁纸：默认富士山实景图 —— */
+  --wallpaper-image: url("../assets/wallpaper.jpg");
+  --wallpaper-position: center 58%;
+  --wallpaper-vignette: inset 0 0 300px rgba(0, 0, 0, 0.7);
+}
+
+/*
+ * ============ 主题令牌 ============
+ *
+ * 深色是基准（下面这组），浅色只覆盖需要换的值。
+ * 组件里不要写裸色值，否则切到浅色主题会留下看不清的深色块。
+ */
+
+/* —— 深色 —— */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* —— 底色：留一点冷暖差，模糊才有东西可糊 —— */
+  --bg-base: #0f1216;
+  --bg-tint-1: rgba(80, 130, 255, 0.16);
+  --bg-tint-2: rgba(60, 220, 170, 0.1);
+  --bg-tint-3: rgba(255, 140, 90, 0.08);
+
+  /* —— 玻璃层：暗色着色 + 白色高光，保证任何壁纸上文字都可读 —— */
+  --glass-1: rgba(16, 20, 27, 0.72);       /* 最外层：侧边栏 / 面板 */
+  --glass-2: rgba(22, 27, 35, 0.68);       /* 中间层：卡片 / 控件轨道 */
+  --glass-3: rgba(34, 40, 51, 0.66);       /* 最近观者：输入框 / 悬浮 */
+  --glass-raised: rgba(56, 65, 80, 0.55);  /* 选中行 / 强调块 */
+  --glass-hover: rgba(255, 255, 255, 0.075);
+  --glass-active: rgba(255, 255, 255, 0.11);
+  /* 需要完全遮挡底图的地方（弹窗、代码编辑器）用不透明的表面 */
+  --surface: rgba(26, 31, 40, 0.96);
+
+  /* —— 半透明填充：组件里的悬停、凹槽、轨道统一走这几个 —— */
+  --tint-faint: rgba(255, 255, 255, 0.03);  /* 休息日底纹、KPI 格 */
+  --tint-soft: rgba(255, 255, 255, 0.045);  /* 卡片内的小块 */
+  --tint-hover: rgba(255, 255, 255, 0.06);  /* 行悬停、输入框聚焦 */
+  --tint-strong: rgba(255, 255, 255, 0.1);  /* 强调描边、选中态 */
+  --tint-inset: rgba(0, 0, 0, 0.28);        /* 凹槽（进度条底、分段控件） */
+  --tint-inset-strong: rgba(0, 0, 0, 0.32); /* 代码区等更深的凹槽 */
+
+  /* —— 镜面高光与描边 —— */
+  --specular-top: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --specular-rim: inset 0 0 0 1px rgba(255, 255, 255, 0.055);
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --divider: rgba(255, 255, 255, 0.07);
+  --window-edge: rgba(255, 255, 255, 0.08);
+
+  /*
+   * —— 文字 ——
+   * 最低一档从 0.38 提到 0.50：11px 的中文压在玻璃上，0.38 的对比度只有 3.7:1，
+   * 低于 WCAG AA 的 4.5:1，截图里那些「看不清的小字」就是它。
+   */
+  --text-strong: rgba(255, 255, 255, 0.96);
+  --text: rgba(255, 255, 255, 0.86);
+  --text-muted: rgba(255, 255, 255, 0.64);
+  --text-faint: rgba(255, 255, 255, 0.5);
+
+  /* —— 主数字区的玻璃镜片 —— */
+  --hero-glass: linear-gradient(
+    168deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.05) 46%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  --hero-border: rgba(255, 255, 255, 0.14);
+  --hero-highlight: rgba(255, 255, 255, 0.22);
+  --hero-shadow: 0 10px 28px -18px rgba(0, 0, 0, 0.8);
+  --text-shadow-lg: 0 1px 14px rgba(0, 0, 0, 0.4);
+
+  /* —— 系统色 —— */
+  --accent: #0a84ff;
+  --accent-strong: #4aa3ff;
+  --accent-soft: rgba(10, 132, 255, 0.2);
+  --positive: #30d158;
+  --positive-soft: rgba(48, 209, 88, 0.16);
+  --negative: #ff453a;
+  --negative-soft: rgba(255, 69, 58, 0.16);
+  --warning: #ff9f0a;
+  --warning-soft: rgba(255, 159, 10, 0.16);
+
+  /* —— 阴影 —— */
+  --shadow-panel: 0 24px 60px -20px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.25);
+  --shadow-popover: 0 20px 50px -12px rgba(0, 0, 0, 0.8);
+  --shadow-md: 0 14px 36px -14px rgba(0, 0, 0, 0.72), 0 2px 6px rgba(0, 0, 0, 0.28);
+  --shadow-control: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  --backdrop-dim: rgba(0, 0, 0, 0.45);
+  --menu-bg: rgba(24, 28, 36, 0.92);
+  --option-bg: #1c1c1e;
+}
+
+/* —— 浅色 —— */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-base: #eef1f6;
+  --bg-tint-1: rgba(80, 130, 255, 0.14);
+  --bg-tint-2: rgba(60, 200, 160, 0.12);
+  --bg-tint-3: rgba(255, 150, 90, 0.12);
+
+  /* 浅色玻璃用白色半透明：底图透上来是亮的，字才会深 */
+  --glass-1: rgba(252, 253, 255, 0.78);
+  --glass-2: rgba(255, 255, 255, 0.72);
+  --glass-3: rgba(255, 255, 255, 0.86);
+  --glass-raised: rgba(255, 255, 255, 0.92);
+  --glass-hover: rgba(0, 0, 0, 0.05);
+  --glass-active: rgba(0, 0, 0, 0.08);
+  --surface: rgba(252, 253, 255, 0.97);
+
+  --tint-faint: rgba(0, 0, 0, 0.025);
+  --tint-soft: rgba(0, 0, 0, 0.035);
+  --tint-hover: rgba(0, 0, 0, 0.05);
+  --tint-strong: rgba(0, 0, 0, 0.1);
+  --tint-inset: rgba(0, 0, 0, 0.06);
+  --tint-inset-strong: rgba(0, 0, 0, 0.08);
+
+  /* 浅色下的高光用白色更亮一点，描边反过来用深色 */
+  --specular-top: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --specular-rim: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --border: rgba(0, 0, 0, 0.1);
+  --border-strong: rgba(0, 0, 0, 0.18);
+  --divider: rgba(0, 0, 0, 0.07);
+  --window-edge: rgba(0, 0, 0, 0.12);
+
+  --text-strong: rgba(0, 0, 0, 0.92);
+  --text: rgba(0, 0, 0, 0.76);
+  --text-muted: rgba(0, 0, 0, 0.56);
+  --text-faint: rgba(0, 0, 0, 0.42);
+
+  --hero-glass: linear-gradient(
+    168deg,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(255, 255, 255, 0.62) 46%,
+    rgba(255, 255, 255, 0.4) 100%
+  );
+  --hero-border: rgba(255, 255, 255, 0.9);
+  --hero-highlight: rgba(255, 255, 255, 0.95);
+  --hero-shadow: 0 10px 28px -18px rgba(0, 0, 0, 0.35);
+  --text-shadow-lg: 0 1px 10px rgba(255, 255, 255, 0.6);
+
+  --accent: #007aff;
+  --accent-strong: #0062cc;
+  --accent-soft: rgba(0, 122, 255, 0.14);
+  --positive: #12893f;
+  --positive-soft: rgba(18, 137, 63, 0.12);
+  --negative: #d92c20;
+  --negative-soft: rgba(217, 44, 32, 0.1);
+  --warning: #b25c00;
+  --warning-soft: rgba(178, 92, 0, 0.1);
+
+  --shadow-panel: 0 24px 60px -24px rgba(20, 30, 50, 0.28), 0 2px 8px rgba(20, 30, 50, 0.08);
+  --shadow-popover: 0 20px 50px -14px rgba(20, 30, 50, 0.3);
+  --shadow-md: 0 14px 36px -16px rgba(20, 30, 50, 0.28), 0 2px 6px rgba(20, 30, 50, 0.08);
+  --shadow-control: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+  --backdrop-dim: rgba(30, 40, 60, 0.28);
+  --menu-bg: rgba(252, 253, 255, 0.96);
+  --option-bg: #ffffff;
+
+  /* 浅色壁纸要压得更狠一些，否则白字会浮 */
+  --wallpaper-vignette: inset 0 0 240px rgba(255, 255, 255, 0.55);
+}
+
+/*
+ * ============ 壁纸 ============
+ *
+ * 除默认的实景图外，其余几张都是纯 CSS 渐变 —— 不增加包体积，
+ * 也方便那些不想让照片透进窗口的用户。
+ */
+:root[data-wallpaper="aurora"] {
+  --wallpaper-image: linear-gradient(
+    155deg,
+    #06131f 0%,
+    #0b2f3a 32%,
+    #12615a 58%,
+    #0a2333 82%,
+    #050b14 100%
+  );
+  --wallpaper-position: center;
+}
+
+:root[data-wallpaper="dusk"] {
+  --wallpaper-image: linear-gradient(
+    160deg,
+    #1a1030 0%,
+    #3a1a4d 30%,
+    #7a2f4a 56%,
+    #c2673f 76%,
+    #2a1526 100%
+  );
+  --wallpaper-position: center;
+}
+
+:root[data-wallpaper="plain"] {
+  --wallpaper-image: none;
+  --wallpaper-position: center;
+}
+
+/* 浅色主题下这几张渐变要反过来，否则白底配深图会脏 */
+:root[data-theme="light"][data-wallpaper="aurora"] {
+  --wallpaper-image: linear-gradient(155deg, #dceaf5 0%, #c3e2de 45%, #e6f2fa 100%);
+}
+
+:root[data-theme="light"][data-wallpaper="dusk"] {
+  --wallpaper-image: linear-gradient(160deg, #f2e6f7 0%, #f7dfe6 42%, #fbe8d8 74%, #f6eef4 100%);
+}
+
+/*
+ * 关闭毛玻璃：低配机器上 backdrop-filter 是最大的开销。
+ * 同时把玻璃层调成近乎不透明，避免关掉模糊后文字糊在壁纸上。
+ */
+:root[data-opaque="true"] {
+  --glass-1: rgba(16, 20, 27, 0.96);
+  --glass-2: rgba(22, 27, 35, 0.96);
+  --glass-3: rgba(34, 40, 51, 0.96);
+  --glass-raised: rgba(56, 65, 80, 0.96);
+  --surface: rgba(22, 27, 35, 0.99);
+}
+
+:root[data-theme="light"][data-opaque="true"] {
+  --glass-1: rgba(248, 250, 253, 0.97);
+  --glass-2: rgba(255, 255, 255, 0.97);
+  --glass-3: rgba(255, 255, 255, 0.98);
+  --glass-raised: rgba(255, 255, 255, 1);
+  --surface: rgba(255, 255, 255, 0.99);
+}
+
+:root[data-opaque="true"] .glass,
+:root[data-opaque="true"] .card,
+:root[data-opaque="true"] .result,
+:root[data-opaque="true"] .titlebar,
+:root[data-opaque="true"] .toast {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+:root[data-opaque="true"] body::after {
+  opacity: 0.35;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  /* iOS 上底层是系统壁纸/窗口背景，这里画自己的底色 */
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-regular);
+  /* 行高用无单位数值：字号缩放时行高才会跟着放大，否则大字号会挤在一起 */
+  line-height: var(--lh-body);
+  letter-spacing: var(--ls-body);
+  /* 变量字体：光学尺寸随字号自动调整；禁止合成粗体与斜体 */
+  font-optical-sizing: auto;
+  font-synthesis: none;
+  font-feature-settings: "kern" 1;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+
+  /* 安全区：刘海与 Home 指示条 */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+
+  /* 输入框聚焦时不要被 iOS 自动放大字号 */
+  -webkit-text-size-adjust: 100%;
+  /* 整页不跟着橡皮筋滚动，滚动交给内部的容器 */
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/*
+ * 触摸优化：iOS 上没有悬停。
+ * 所有 :hover 样式包进 (hover: hover)，避免点完之后高亮「粘」在元素上。
+ * 下面的全局覆盖是兜底，各组件里的 hover 规则也照同一原则处理。
+ */
+@media (hover: none) {
+  button:hover,
+  .btn:hover,
+  .nav__row:hover,
+  .income-row:hover,
+  .rail__row:hover,
+  .theme-card:hover,
+  .wallpaper-card:hover,
+  .day__type:hover,
+  .day__hours:hover {
+    background-color: transparent;
+    border-color: inherit;
+    color: inherit;
+  }
+}
+
+/* 系统字体不做光学尺寸缩放（SF Pro 自己有） */
+@supports (-webkit-touch-callout: none) {
+  body {
+    font-optical-sizing: auto;
+  }
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  letter-spacing: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* 浏览器调试时给个底色，桌面里窗口是透明的 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(900px 600px at 12% -8%, var(--bg-tint-1) 0%, transparent 62%),
+    radial-gradient(760px 520px at 96% 6%, var(--bg-tint-2) 0%, transparent 58%),
+    radial-gradient(680px 480px at 70% 104%, var(--bg-tint-3) 0%, transparent 60%),
+    var(--bg-base);
+}
+
+/*
+ * 壁纸层：Liquid Glass 的玻璃需要真实内容做背景才有通透感。
+ * 壁纸本身已经调暗过（见 src/assets/wallpaper.jpg），这里再叠一层压暗，
+ * 保证白色文字在任何区域都有足够对比度。
+ *
+ * 具体用哪张由 data-wallpaper 决定，压暗程度由明暗主题决定。
+ */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: var(--wallpaper-image);
+  background-size: cover;
+  background-position: var(--wallpaper-position);
+  background-repeat: no-repeat;
+  /* 四周压暗，中间留出富士山；玻璃叠上去才有层次 */
+  box-shadow: var(--wallpaper-vignette);
+  transition: opacity 260ms ease-out;
+}
+
+/* iOS 不显示滚动条，用惯性滚动即可 */
+::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.stage,
+.summary,
+.pane__body,
+.breakdown {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-pill);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ============ 玻璃面板 ============ */
+
+.glass {
+  background: var(--glass-1);
+  backdrop-filter: blur(46px) saturate(170%);
+  -webkit-backdrop-filter: blur(46px) saturate(170%);
+  border: 1px solid var(--border);
+  box-shadow: var(--specular-top), var(--specular-rim), var(--shadow-panel);
+}
+
+/* 卡片：嵌在面板里的第二层玻璃 */
+.card {
+  background: var(--glass-2);
+  backdrop-filter: blur(30px) saturate(160%);
+  -webkit-backdrop-filter: blur(30px) saturate(160%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--specular-top), var(--specular-rim);
+  /* 卡片贴合内容高度，下方露出壁纸，玻璃才有东西可透 */
+  align-self: start;
+  width: 100%;
+}
+
+.card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.card__title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--fs-heading);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-heading);
+  letter-spacing: var(--ls-heading);
+  color: var(--text-strong);
+}
+
+.card__subtitle {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-regular);
+  letter-spacing: var(--ls-caption);
+  color: var(--text-muted);
+}
+
+.card__body {
+  padding: 18px;
+}
+
+/* ============ 按钮 ============ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--glass-2);
+  box-shadow: var(--shadow-control);
+  color: var(--text);
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-label);
+  transition: var(--transition);
+}
+
+.btn:hover {
+  background-color: var(--glass-hover);
+  border-color: var(--border-strong);
+  color: var(--text-strong);
+}
+
+.btn:active {
+  background-color: var(--glass-active);
+}
+
+.btn--primary {
+  background: linear-gradient(180deg, #3d9bff 0%, #0a84ff 100%);
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 6px 16px -8px rgba(10, 132, 255, 0.9);
+  color: #fff;
+}
+
+.btn--primary:hover {
+  background: linear-gradient(180deg, #56a9ff 0%, #1a8cff 100%);
+  color: #fff;
+}
+
+.btn--ghost {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+}
+
+.btn--ghost:hover {
+  background-color: var(--glass-hover);
+  border-color: transparent;
+  color: var(--text-strong);
+}
+
+.btn--danger:hover {
+  color: var(--negative);
+  border-color: rgba(255, 69, 58, 0.4);
+  background-color: var(--negative-soft);
+}
+
+.btn:disabled {
+  background: var(--glass-1);
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.btn--icon {
+  width: 30px;
+  padding: 0;
+}
+
+.btn--sm {
+  height: 26px;
+  padding: 0 10px;
+  font-size: var(--fs-caption);
+}
+
+.btn--icon.btn--sm {
+  width: 26px;
+}
+
+/* 统一的键盘焦点环：只在键盘操作时出现，鼠标点击不打扰 */
+:where(button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.42);
+}
+
+/* ============ 下拉框 ============ */
+
+.select {
+  height: 30px;
+  padding: 0 27px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--glass-2)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='rgba(255,255,255,0.55)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    no-repeat right 8px center;
+  appearance: none;
+  box-shadow: var(--shadow-control);
+  color: var(--text-strong);
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-label);
+  transition: var(--transition);
+}
+
+.select:hover {
+  border-color: var(--border-strong);
+  background-color: var(--glass-hover);
+}
+
+.select:focus {
+  outline: 0;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3);
+}
+
+.select option {
+  background: var(--option-bg);
+  color: var(--text-strong);
+}
+
+/* ============ 分段控件 ============
+   三处组件原来各写了一份，尺寸和圆角都不一样；统一到这里。
+   二级定位（二级标题里的紧凑版）用 .segmented--sm 覆盖。 */
+
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border-radius: 9px;
+  background: var(--tint-inset);
+  border: 1px solid var(--border);
+  box-shadow: inset 0 1px 2px var(--tint-inset-strong);
+}
+
+.segmented button {
+  height: 24px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-label);
+  white-space: nowrap;
+  transition: var(--transition);
+}
+
+.segmented button:hover {
+  color: var(--text-strong);
+}
+
+.segmented button.active {
+  /* 选中态用「提亮一档的表面」而不是固定白色：浅色主题下白底白字会看不见 */
+  background: var(--glass-raised);
+  color: var(--text-strong);
+  box-shadow: 0 1px 3px var(--tint-inset-strong), inset 0 1px 0 var(--hero-highlight);
+}
+
+.segmented--sm {
+  border-radius: 8px;
+}
+
+.segmented--sm button {
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 6px;
+  font-size: var(--fs-caption);
+}
+
+/* ============ 勾选框 ============
+   原生复选框的蓝色方块是页面上最像「网页」的一处，换成玻璃底 + 渐变填充。 */
+
+input[type="checkbox"] {
+  appearance: none;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  background: var(--tint-hover);
+  box-shadow: inset 0 1px 0 var(--specular-top);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+input[type="checkbox"]:hover {
+  border-color: var(--text-faint);
+  background-color: var(--tint-strong);
+}
+
+input[type="checkbox"]:checked {
+  border-color: rgba(255, 255, 255, 0.24);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.6 6.3 4.9 8.6 9.4 3.7' fill='none' stroke='%23fff' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+      center / 12px no-repeat,
+    linear-gradient(180deg, #3d9bff 0%, #0a84ff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 2px 6px -2px rgba(10, 132, 255, 0.8);
+}
+
+input[type="checkbox"]:checked {
+  border-color: rgba(255, 255, 255, 0.24);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.6 6.3 4.9 8.6 9.4 3.7' fill='none' stroke='%23fff' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+      center / 12px no-repeat,
+    linear-gradient(180deg, #3d9bff 0%, #0a84ff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 2px 6px -2px rgba(10, 132, 255, 0.8);
+}
+
+input[type="checkbox"]:checked:hover {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.6 6.3 4.9 8.6 9.4 3.7' fill='none' stroke='%23fff' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+      center / 12px no-repeat,
+    linear-gradient(180deg, #56a9ff 0%, #1a8cff 100%);
+}
+
+/* ============ 标签 ============ */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 5px;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-caption);
+  white-space: nowrap;
+}
+
+.tag--accent {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.tag--muted {
+  background: var(--glass-2);
+  color: var(--text-muted);
+}
+
+.tag--positive {
+  background: var(--positive-soft);
+  color: var(--positive);
+}
+
+/* ============ 数值 ============
+   金额一律等宽数字（tnum），加减时数位不跳动；字体跟随正文字体，
+   不再单独切换到等宽字体 —— 之前底部表格是 Consolas、顶部大数字是 Georgia。 */
+
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: 0;
+}
+
+.hint {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 159, 10, 0.26);
+  border-radius: var(--radius-sm);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-body);
+}
+
+/* ============ 减弱动态效果 ============ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ===========================================================
+   窄屏（iPhone）适配
+   桌面版的卡片头是「标题 + 副标题 + 右侧操作」挤在一行，
+   在 390pt 宽下标题会被压成一列竖排的字。这里改成上下两段。
+   =========================================================== */
+
+.card__header {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.card__title {
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  font-size: var(--fs-subhead);
+}
+
+/* 副标题独占一行，不参与主标题的换行计算 */
+.card__subtitle {
+  flex-basis: 100%;
+  line-height: var(--lh-body);
+  white-space: normal;
+}
+
+/* 卡片头的操作区（下拉 + 添加）铺满一行，按钮按触摸尺寸放大 */
+.card__header > :not(.card__title) {
+  align-self: stretch;
+}
+
+.card__header .claims,
+.card__header .income-actions,
+.card__header .actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.card__header .select,
+.card__header .select--sm {
+  flex: 1;
+  height: 38px;
+}
+
+.card__header .btn {
+  height: 38px;
+  padding: 0 16px;
+}
+
+/* 正文里的按钮统一放大到触摸尺寸 */
+.btn {
+  min-height: 36px;
+}
+
+.btn--sm {
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.btn--icon {
+  width: 38px;
+  min-width: 38px;
+}
+
+.segmented button {
+  min-height: 34px;
+  padding: 0 14px;
+}
+
+/* 数字输入框也用触摸尺寸 */
+.number-field {
+  height: 40px;
+}
+
+/* 表格在手机上不可避免地要横向滚动，给它一个可见的提示 */
+.table-wrap {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+/* 分栏的字段网格在窄屏下一律单列，两列会把输入框挤到看不清数字 */
+.grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.tiers {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+/*
+ * 输入框字号不小于 16px：iOS 上聚焦时会判断字号，小于 16 就自动放大整页，
+ * 用户得手动缩回去，非常打断操作。
+ */
+input,
+select,
+textarea,
+.number-field__input {
+  font-size: max(16px, calc(var(--fs-body)));
+}
+
+.number-field__suffix,
+.number-field__prefix {
+  font-size: var(--fs-label);
+}
