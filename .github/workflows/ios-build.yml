@@ -73,6 +73,10 @@ jobs:
               "\n\t\t\t\tCODE_SIGN_IDENTITY = \"\";"
               "\n\t\t\t\tDEVELOPMENT_TEAM = \"\";"
               "\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"\";"
+              # 关掉 debug dylib：那是 Xcode 的「可调试模式」，会额外产出
+              # SalaryTool.debug.dylib（80 MB）并把主二进制变成加载器。
+              # 真机上没有调试会话时它启动不了，而且包体积翻 5 倍。
+              "\n\t\t\t\tENABLE_DEBUG_DYLIB = NO;"
           )
 
           count = text.count("buildSettings = {")
@@ -97,7 +101,7 @@ jobs:
         working-directory: ios
         run: |
           set +e
-          npx tauri ios build --debug --target aarch64 --ci 2>&1 | tee "$RUNNER_TEMP/ios-build.log"
+          npx tauri ios build --target aarch64 --ci 2>&1 | tee "$RUNNER_TEMP/ios-build.log"
           STATUS=${PIPESTATUS[0]}
           echo "tauri ios build 退出码: $STATUS"
 
@@ -119,6 +123,12 @@ jobs:
           echo "版本:      $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")"
           echo "最低系统:  $(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/Info.plist")"
           echo "可执行文件: $(file -b "$APP/SalaryTool")"
+          if [ -f "$APP/SalaryTool.debug.dylib" ]; then
+            echo "::warning::这是 debug 版（含 SalaryTool.debug.dylib），真机启动可能失败"
+          else
+            echo "Release 版（无 debug dylib）✓"
+          fi
+          echo "包内文件数: $(find "$APP" -type f | wc -l)"
           du -sh "$APP"
 
       - name: 打包 ipa
