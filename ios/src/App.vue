@@ -114,6 +114,9 @@ function resetData(): void {
 }
 
 const exporting = ref(false);
+/** 最近一次导出的文件名，导出成功后弹提示用 */
+const lastExport = ref("");
+const showExportDone = ref(false);
 
 async function exportBackup(): Promise<void> {
   if (exporting.value) return;
@@ -125,7 +128,8 @@ async function exportBackup(): Promise<void> {
       contents: exportState(state),
     });
     if (saved.status === "saved") {
-      toast("已保存，可在「文件」里找到");
+      lastExport.value = saved.fileName;
+      showExportDone.value = true;
     } else if (saved.status === "downloaded") {
       toast("已下载备份文件");
     }
@@ -202,24 +206,26 @@ function onFieldFocus(event: FocusEvent): void {
 <template>
   <div class="app" :style="{ '--keyboard-inset': keyboardInset + 'px' }">
     <header class="topbar">
-      <div class="topbar__text">
-        <span class="topbar__title">当月薪水到手计算器</span>
-        <span class="topbar__meta">{{ selectedCity.name }} · 第 {{ state.ytd.monthIndex }} 月</span>
-      </div>
-      <div class="topbar__actions">
-        <button class="icon-btn" type="button" aria-label="导入配置" @click="showImport = true">
-          <svg viewBox="0 0 20 20" aria-hidden="true">
-            <path d="M10 14V4M6.2 7.8 10 4l3.8 3.8M4 13.5v2.5h12v-2.5" />
-          </svg>
-        </button>
-        <button class="icon-btn" type="button" aria-label="设置" @click="showSettings = true">
-          <svg viewBox="0 0 20 20" aria-hidden="true">
-            <circle cx="10" cy="10" r="2.6" />
-            <path
-              d="M8.52 1.9h2.96l.34 1.72c.46.15.9.36 1.3.62l1.58-.78 2.1 2.1-.78 1.58c.26.4.47.84.62 1.3l1.72.34v2.96l-1.72.34c-.15.46-.36.9-.62 1.3l.78 1.58-2.1 2.1-1.58-.78c-.4.26-.84.47-1.3.62l-.34 1.72H8.52l-.34-1.72c-.46-.15-.9-.36-1.3-.62l-1.58.78-2.1-2.1.78-1.58a6.8 6.8 0 0 1-.62-1.3L1.9 11.48V8.52l1.72-.34c.15-.46.36-.9.62-1.3l-.78-1.58 2.1-2.1 1.58.78c.4-.26.84-.47 1.3-.62L8.52 1.9Z"
-            />
-          </svg>
-        </button>
+      <div class="topbar__row">
+        <div class="topbar__text">
+          <h1 class="topbar__title">工资单</h1>
+          <span class="topbar__meta">{{ selectedCity.name }} · 第 {{ state.ytd.monthIndex }} 月</span>
+        </div>
+        <div class="topbar__actions">
+          <button class="icon-btn" type="button" aria-label="导入配置" @click="showImport = true">
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M10 13.5V4M6.4 7.6 10 4l3.6 3.6M4.5 13v2.5h11V13" />
+            </svg>
+          </button>
+          <button class="icon-btn" type="button" aria-label="设置" @click="showSettings = true">
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <circle cx="10" cy="10" r="2.6" />
+              <path
+                d="M8.52 1.9h2.96l.34 1.72c.46.15.9.36 1.3.62l1.58-.78 2.1 2.1-.78 1.58c.26.4.47.84.62 1.3l1.72.34v2.96l-1.72.34c-.15.46-.36.9-.62 1.3l.78 1.58-2.1 2.1-1.58-.78c-.4.26-.84.47-1.3.62l-.34 1.72H8.52l-.34-1.72c-.46-.15-.9-.36-1.3-.62l-1.58.78-2.1-2.1.78-1.58a6.8 6.8 0 0 1-.62-1.3L1.9 11.48V8.52l1.72-.34c.15-.46.36-.9.62-1.3l-.78-1.58 2.1-2.1 1.58.78c.4-.26.84-.47 1.3-.62L8.52 1.9Z"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -335,6 +341,40 @@ function onFieldFocus(event: FocusEvent): void {
       </div>
     </Transition>
 
+    <!-- 导出成功后的说明：iOS 没有「另存为」，必须告诉用户去哪找 -->
+    <Transition name="sheet">
+      <div v-if="showExportDone" class="sheet" @click.self="showExportDone = false">
+        <div class="sheet__panel sheet__panel--compact">
+          <div class="sheet__grip" aria-hidden="true" />
+          <div class="export-done">
+            <span class="export-done__icon" aria-hidden="true">
+              <svg viewBox="0 0 32 32">
+                <circle cx="16" cy="16" r="15" fill="none" stroke="currentColor" stroke-width="1.4" />
+                <path
+                  d="M10 16.5 14.2 20.7 22.5 12.4"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.1"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </span>
+            <h2 class="export-done__title">已导出</h2>
+            <p class="export-done__file num">{{ lastExport }}</p>
+            <p class="export-done__where">
+              文件保存在 App 的文档目录。打开 iPhone 上的
+              <strong>「文件」</strong> App → <strong>我的 iPhone</strong> → <strong>SalaryTool</strong>，
+              就能看到这个文件；长按可以拷贝或分享出去。
+            </p>
+            <button class="btn btn--block" type="button" @click="showExportDone = false">
+              知道了
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <ImportDialog :open="showImport" @close="showImport = false" @import="handleImport" />
 
     <SettingsDialog
@@ -360,18 +400,21 @@ function onFieldFocus(event: FocusEvent): void {
   transition: padding-bottom 180ms ease-out;
 }
 
-/* ============ 顶部 ============ */
+/* ============ 顶部：iOS 大标题 ============
+   不用导航栏那种「居中标题 + 返回键」，因为这里没有层级退回。
+   大标题 + 右侧两个图标按钮，是健康、提醒事项那类 App 的做法。 */
 
 .topbar {
   flex: none;
+  padding: calc(8px + env(safe-area-inset-top)) 16px 6px;
+  background: transparent;
+}
+
+.topbar__row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
-  padding: 10px 14px;
-  background: var(--glass-1);
-  backdrop-filter: blur(30px) saturate(170%);
-  -webkit-backdrop-filter: blur(30px) saturate(170%);
-  border-bottom: 1px solid var(--divider);
 }
 
 .topbar__text {
@@ -379,48 +422,47 @@ function onFieldFocus(event: FocusEvent): void {
   flex-direction: column;
   gap: 1px;
   min-width: 0;
-  flex: 1;
 }
 
 .topbar__title {
-  font-size: var(--fs-body);
-  font-weight: var(--fw-semibold);
-  letter-spacing: var(--ls-heading);
+  margin: 0;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.022em;
   color: var(--text-strong);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .topbar__meta {
-  font-size: var(--fs-caption);
+  font-size: 13px;
   letter-spacing: var(--ls-caption);
   color: var(--text-muted);
 }
 
 .topbar__actions {
   display: flex;
-  gap: 4px;
+  gap: 8px;
   flex: none;
 }
 
-/* 图标按钮按 44pt 触摸目标做，图标本身小一些免得显得笨重 */
+/* iOS 的图标按钮是圆形半透明块，不是方形描边按钮 */
 .icon-btn {
   display: grid;
   place-items: center;
-  width: var(--tap-min);
-  height: var(--tap-min);
+  width: 38px;
+  height: 38px;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--text-muted);
-  transition: var(--transition);
+  border-radius: 50%;
+  background: var(--tint-hover);
+  color: var(--text-strong);
+  transition: background-color 160ms ease-out, transform 140ms ease-out;
 }
 
 .icon-btn:active {
-  background: var(--glass-active);
-  color: var(--text-strong);
+  transform: scale(0.94);
+  background: var(--tint-strong);
 }
 
 .icon-btn svg {
@@ -428,7 +470,7 @@ function onFieldFocus(event: FocusEvent): void {
   height: 19px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.5;
+  stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -597,6 +639,60 @@ function onFieldFocus(event: FocusEvent): void {
   background: var(--surface);
   border-top: 1px solid var(--border-strong);
   box-shadow: 0 -16px 48px -16px rgba(0, 0, 0, 0.6);
+}
+
+.sheet__panel--compact {
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+}
+
+.export-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px 4px;
+  text-align: center;
+}
+
+.export-done__icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 2px;
+  color: var(--positive);
+}
+
+.export-done__icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.export-done__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.015em;
+  color: var(--text-strong);
+}
+
+.export-done__file {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.export-done__where {
+  margin: 4px 0 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.export-done__where strong {
+  color: var(--text-strong);
+  font-weight: var(--fw-semibold);
 }
 
 .sheet__grip {
