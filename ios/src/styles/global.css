@@ -540,88 +540,93 @@ body::after {
   padding: 18px;
 }
 
-/* ============ 按钮 ============ */
+/* ============ 按钮 ============
+   iOS 的按钮几乎不用描边 —— 靠「填充 / 无填充」区分层级，
+   圆角比桌面大，按下时轻微缩放。桌面版那套 1px 描边 + 8px 圆角
+   在手机上看起来就是「网页控件」。 */
 
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 30px;
-  padding: 0 13px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--glass-2);
-  box-shadow: var(--shadow-control);
-  color: var(--text);
-  font-size: var(--fs-label);
-  font-weight: var(--fw-medium);
-  letter-spacing: var(--ls-label);
-  transition: var(--transition);
-}
-
-.btn:hover {
-  background-color: var(--glass-hover);
-  border-color: var(--border-strong);
+  /* 44pt 是 iOS 的最小触摸目标，这里取 38 平衡密度 */
+  height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--tint-hover);
   color: var(--text-strong);
+  font-size: 15px;
+  font-weight: var(--fw-medium);
+  letter-spacing: -0.005em;
+  transition:
+    background-color 160ms ease-out,
+    transform 140ms ease-out,
+    opacity 160ms ease-out;
 }
 
 .btn:active {
-  background-color: var(--glass-active);
+  transform: scale(0.97);
+  background: var(--tint-strong);
 }
 
 .btn--primary {
-  background: linear-gradient(180deg, #3d9bff 0%, #0a84ff 100%);
-  border-color: rgba(255, 255, 255, 0.22);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 6px 16px -8px rgba(10, 132, 255, 0.9);
+  background: var(--accent);
   color: #fff;
+  font-weight: var(--fw-semibold);
+  box-shadow: 0 4px 16px -6px var(--accent);
 }
 
-.btn--primary:hover {
-  background: linear-gradient(180deg, #56a9ff 0%, #1a8cff 100%);
-  color: #fff;
+.btn--primary:active {
+  background: var(--accent);
+  opacity: 0.85;
 }
 
 .btn--ghost {
-  border-color: transparent;
   background: transparent;
-  box-shadow: none;
-  color: var(--text-muted);
+  color: var(--accent);
 }
 
-.btn--ghost:hover {
-  background-color: var(--glass-hover);
-  border-color: transparent;
-  color: var(--text-strong);
+.btn--ghost:active {
+  background: var(--accent-soft);
 }
 
-.btn--danger:hover {
+.btn--danger {
+  background: transparent;
   color: var(--negative);
-  border-color: rgba(255, 69, 58, 0.4);
-  background-color: var(--negative-soft);
+}
+
+.btn--danger:active {
+  background: var(--negative-soft);
 }
 
 .btn:disabled {
-  background: var(--glass-1);
-  border-color: transparent;
-  box-shadow: none;
+  background: var(--tint-faint);
   color: var(--text-faint);
-  cursor: not-allowed;
+  box-shadow: none;
+  opacity: 1;
 }
 
 .btn--icon {
-  width: 30px;
+  width: 38px;
   padding: 0;
 }
 
 .btn--sm {
-  height: 26px;
-  padding: 0 10px;
-  font-size: var(--fs-caption);
+  height: 32px;
+  padding: 0 13px;
+  font-size: 14px;
+  border-radius: 10px;
 }
 
 .btn--icon.btn--sm {
-  width: 26px;
+  width: 32px;
+}
+
+/* 整行宽的按钮：设置面板里的「恢复默认」「导出备份」这类 */
+.btn--block {
+  width: 100%;
 }
 
 /* 统一的键盘焦点环：只在键盘操作时出现，鼠标点击不打扰 */
@@ -633,31 +638,28 @@ body::after {
 /* ============ 下拉框 ============ */
 
 .select {
-  height: 30px;
-  padding: 0 27px 0 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--glass-2)
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='rgba(255,255,255,0.55)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
-    no-repeat right 8px center;
+  height: 38px;
+  padding: 0 34px 0 14px;
+  border: 0;
+  border-radius: 12px;
+  background-color: var(--tint-hover);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='rgba(255,255,255,0.5)' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 13px center;
   appearance: none;
-  box-shadow: var(--shadow-control);
   color: var(--text-strong);
-  font-size: var(--fs-label);
-  font-weight: var(--fw-medium);
-  letter-spacing: var(--ls-label);
-  transition: var(--transition);
+  font-size: 15px;
+  letter-spacing: -0.005em;
+  transition: background-color 160ms ease-out;
 }
 
-.select:hover {
-  border-color: var(--border-strong);
-  background-color: var(--glass-hover);
+.select:active {
+  background-color: var(--tint-strong);
 }
 
 .select:focus {
   outline: 0;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .select option {
@@ -824,33 +826,70 @@ input[type="checkbox"]:checked:hover {
 }
 
 /* ===========================================================
-   窄屏（iPhone）适配
-   桌面版的卡片头是「标题 + 副标题 + 右侧操作」挤在一行，
-   在 390pt 宽下标题会被压成一列竖排的字。这里改成上下两段。
+   iPhone 适配（重写版）
+
+   这一节不是「把桌面样式缩小」，而是按 iOS 系统应用的观感重排：
+
+   - 卡片：18px 圆角 + 半透明玻璃，不再有 1px 描边
+   - 分组：相邻的字段合并成一张 inset grouped 卡片，块内用 0.5px 细分隔线
+   - 控件：全部无描边、圆角 10–12、按下缩放
+   - 字号：正文 15–17，说明 13，最小 12
    =========================================================== */
+
+/* ---- 卡片 ---- */
+
+.card {
+  border: 0;
+  border-radius: 18px;
+  background: var(--glass-2);
+  box-shadow: none;
+  backdrop-filter: blur(28px) saturate(170%);
+  -webkit-backdrop-filter: blur(28px) saturate(170%);
+}
 
 .card__header {
   flex-direction: column;
   align-items: stretch;
-  gap: 10px;
-  padding: 12px 14px;
+  gap: 14px;
+  padding: 16px 16px 4px;
+  border-bottom: 0;
+}
+
+/* 卡片头的下拉（选城市）：不要铺满，靠右、收窄 */
+.card__header .select,
+.card__header .select--sm {
+  flex: none;
+  align-self: flex-start;
+  min-width: 0;
+  width: auto;
+  max-width: 60%;
+  height: 34px;
 }
 
 .card__title {
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px;
-  font-size: var(--fs-subhead);
+  display: block;
+  font-size: 17px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.01em;
+  color: var(--text-strong);
 }
 
-/* 副标题独占一行，不参与主标题的换行计算 */
+/* 副标题单独一行，字号 13，颜色弱一档 */
 .card__subtitle {
-  flex-basis: 100%;
-  line-height: var(--lh-body);
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: var(--fw-regular);
+  letter-spacing: var(--ls-caption);
+  color: var(--text-muted);
   white-space: normal;
 }
 
-/* 卡片头的操作区（下拉 + 添加）铺满一行，按钮按触摸尺寸放大 */
+.card__body {
+  padding: 14px 16px 16px;
+}
+
+/* 卡片头的操作区：铺满一行，按钮高度统一 */
 .card__header > :not(.card__title) {
   align-self: stretch;
 }
@@ -866,52 +905,100 @@ input[type="checkbox"]:checked:hover {
 .card__header .select,
 .card__header .select--sm {
   flex: 1;
+  min-width: 0;
   height: 38px;
 }
 
-.card__header .btn {
-  height: 38px;
-  padding: 0 16px;
+/* ---- 字段网格：一律单列，两列会把金额挤到看不清 ---- */
+
+.grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0 !important;
+  /* inset grouped：字段之间用细线分隔，外面包一层圆角 */
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--tint-faint);
 }
 
-/* 正文里的按钮统一放大到触摸尺寸 */
-.btn {
-  min-height: 36px;
+.grid > .field {
+  padding: 12px 14px;
+  gap: 4px;
 }
 
-.btn--sm {
-  min-height: 34px;
-  padding: 0 12px;
+.grid > .field + .field {
+  border-top: 0.5px solid var(--divider);
 }
 
-.btn--icon {
-  width: 38px;
-  min-width: 38px;
+/* 字段名右对齐 + 值左对齐，像 iOS 设置那样 */
+.field__label {
+  font-size: 13px;
+  font-weight: var(--fw-regular);
+  letter-spacing: var(--ls-caption);
+  color: var(--text-muted);
+}
+
+.field__hint {
+  font-size: 12px;
+  letter-spacing: var(--ls-micro);
+  color: var(--text-faint);
+}
+
+/* 三层级的列表（加班费三档）也改成单列 */
+.tiers {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+/* ---- 分段控件：iOS 的 UISegmentedControl ---- */
+
+.segmented {
+  display: flex;
+  padding: 2px;
+  gap: 0;
+  border-radius: 10px;
+  background: var(--tint-inset);
+  border: 0;
+  box-shadow: none;
 }
 
 .segmented button {
-  min-height: 34px;
-  padding: 0 14px;
+  flex: 1;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: var(--fw-medium);
+  letter-spacing: -0.005em;
+  color: var(--text-muted);
+  transition: background-color 160ms ease-out, color 160ms ease-out;
 }
 
-/* 数字输入框也用触摸尺寸 */
+.segmented button.active {
+  background: var(--glass-raised);
+  color: var(--text-strong);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
+}
+
+.segmented--sm button {
+  height: 28px;
+  font-size: 13px;
+}
+
+/* ---- 输入框 ---- */
+
 .number-field {
   height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--tint-hover);
+  box-shadow: none;
 }
 
-/* 表格在手机上不可避免地要横向滚动，给它一个可见的提示 */
-.table-wrap {
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
-}
-
-/* 分栏的字段网格在窄屏下一律单列，两列会把输入框挤到看不清数字 */
-.grid {
-  grid-template-columns: minmax(0, 1fr) !important;
-}
-
-.tiers {
-  grid-template-columns: minmax(0, 1fr) !important;
+.number-field:focus-within {
+  background: var(--tint-strong);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 /*
@@ -927,5 +1014,67 @@ textarea,
 
 .number-field__suffix,
 .number-field__prefix {
-  font-size: var(--fs-label);
+  font-size: 13px;
+}
+
+/* ---- 表格：横向滚动 + 去掉描边 ---- */
+
+.table-wrap {
+  border: 0;
+  border-radius: 14px;
+  background: var(--tint-faint);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.records th {
+  background: transparent;
+  border-bottom: 0.5px solid var(--divider);
+  font-size: 12px;
+  font-weight: var(--fw-medium);
+  color: var(--text-muted);
+}
+
+.records td {
+  border-bottom: 0.5px solid var(--divider);
+}
+
+.records tfoot td {
+  background: transparent;
+  border-top: 0.5px solid var(--divider);
+}
+
+/* ---- 行内列表（其他扣除这类）：改成纵向堆叠 ---- */
+
+@media (max-width: 720px) {
+  .income-row,
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: var(--tint-soft);
+    border-bottom: 0;
+  }
+
+  .income-row + .income-row,
+  .row + .row {
+    margin-top: 10px;
+  }
+}
+
+/* ---- 提示条 ---- */
+
+.hint {
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.disclaimer,
+.tip {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-faint);
 }
