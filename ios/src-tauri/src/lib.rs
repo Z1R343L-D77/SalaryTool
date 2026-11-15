@@ -79,7 +79,15 @@ fn load_state_file(app: tauri::AppHandle, file_name: String) -> Result<Option<St
     Ok(Some(text))
 }
 
-/// 导出备份：写进沙盒的临时目录，返回路径，交给前端弹分享面板。
+/// 导出备份：写到 App 的 Documents 目录。
+///
+/// 之前写到 `app_cache_dir()` —— 那是缓存目录，系统随时可能清理，
+/// 而且用户在「文件」App 里根本看不到，所以导出等于石沉大海。
+///
+/// Documents 配合 Info.plist 里的两项开关，会直接出现在
+/// 「文件 → 我的 iPhone → SalaryTool」里，插数据线或用 iCloud 都能拿到：
+///   UIFileSharingEnabled             = true
+///   LSSupportsOpeningDocumentsInPlace = true
 #[tauri::command]
 fn save_export(
     app: tauri::AppHandle,
@@ -88,12 +96,32 @@ fn save_export(
 ) -> Result<String, String> {
     let dir = app
         .path()
-        .app_cache_dir()
-        .map_err(|e| format!("找不到缓存目录：{e}"))?;
+        .document_dir()
+        .map_err(|e| format!("找不到文档目录：{e}"))?;
     fs::create_dir_all(&dir).map_err(|e| format!("创建目录失败：{e}"))?;
     let target = dir.join(sanitize_file_name(&file_name));
     fs::write(&target, contents).map_err(|e| format!("写入文件失败：{e}"))?;
     Ok(target.to_string_lossy().to_string())
+}
+
+/// 查看 Documents 目录里有哪些文件（供界面显示「已导出 N 个文件」）。
+#[tauri::command]
+fn list_exports(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let dir = app
+        .path()
+        .document_dir()
+        .map_err(|e| format!("找不到文档目录：{e}"))?;
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut names: Vec<String> = fs::read_dir(&dir)
+        .map_err(|e| format!("读取目录失败：{e}"))?
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().to_string())
+        .filter(|name| name.ends_with(".json"))
+        .collect();
+    names.sort();
+    Ok(names)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -103,7 +131,8 @@ pub fn run() {
             app_version,
             save_state_file,
             load_state_file,
-            save_export
+            save_export,
+            list_exports
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
