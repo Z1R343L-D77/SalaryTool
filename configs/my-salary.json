@@ -1,0 +1,146 @@
+{
+  "cityId": "hangzhou",
+  "socialBaseMode": "auto",
+  "housingFundBaseMode": "auto",
+  "incomes": [
+    {
+      "id": "income-basic",
+      "label": "基本工资",
+      "amount": 12000,
+      "includeInSocialBase": true,
+      "includeInHousingFundBase": true,
+      "taxable": true
+    },
+    {
+      "id": "income-performance",
+      "label": "绩效工资",
+      "amount": 2400,
+      "includeInSocialBase": true,
+      "includeInHousingFundBase": false,
+      "taxable": true
+    },
+    {
+      "id": "income-meal",
+      "label": "餐补",
+      "amount": 330,
+      "includeInSocialBase": false,
+      "includeInHousingFundBase": false,
+      "taxable": true
+    },
+    {
+      "id": "income-transport",
+      "label": "交通补贴",
+      "amount": 400,
+      "includeInSocialBase": false,
+      "includeInHousingFundBase": false,
+      "taxable": true
+    },
+    {
+      "id": "income-attendance",
+      "label": "全勤奖",
+      "amount": 200,
+      "includeInSocialBase": false,
+      "includeInHousingFundBase": false,
+      "taxable": true
+    }
+  ],
+  "deductions": [],
+  "social": {
+    "socialBase": 14400,
+    "socialBaseMin": 4812,
+    "socialBaseMax": 24930,
+    "housingFundBase": 12000,
+    "housingFundBaseMin": 2490,
+    "housingFundBaseMax": 24930,
+    "pensionRate": 0.08,
+    "medicalRate": 0.02,
+    "unemploymentRate": 0.005,
+    "housingFundRate": 0.12,
+    "medicalExtra": 0
+  },
+  "special": {
+    "childrenEducation": 2000,
+    "continuingEducation": 0,
+    "seriousIllness": 0,
+    "housingLoanInterest": 1000,
+    "housingRent": 0,
+    "elderlyCare": 0,
+    "infantCare": 0
+  },
+  "ytdMode": "records",
+  "ytd": {
+    "monthIndex": 8,
+    "taxableIncome": 0,
+    "socialDeduction": 0,
+    "specialDeduction": 0,
+    "taxPaid": 0,
+    "basicDeductionMode": "calendarMonth"
+  },
+  "months": [
+    {
+      "id": "month-1",
+      "month": 1,
+      "taxableIncome": 15330,
+      "socialDeduction": 2952,
+      "specialDeduction": 1000,
+      "taxPaid": 191.34,
+      "note": "子女教育扣除还没申报"
+    },
+    {
+      "id": "month-2",
+      "month": 2,
+      "taxableIncome": 15330,
+      "socialDeduction": 2952,
+      "specialDeduction": 1000,
+      "taxPaid": 191.34,
+      "note": ""
+    },
+    {
+      "id": "month-3",
+      "month": 3,
+      "taxableIncome": 15330,
+      "socialDeduction": 2952,
+      "specialDeduction": 3000,
+      "taxPaid": 131.34,
+      "note": "子女教育扣除开始申报"
+    },
+    {
+      "id": "month-4",
+      "month": 4,
+      "taxableIncome": 15330,
+      "socialDeduction": 2952,
+      "specialDeduction": 3000,
+      "taxPaid": 131.34,
+      "note": ""
+    },
+    {
+      "id": "month-5",
+      "month": 5,
+      "taxableIncome": 15330,
+      "socialDeduction": 2952,
+      "specialDeduction": 3000,
+      "taxPaid": 131.34,
+      "note": ""
+    },
+    {
+      "id": "month-6",
+      "month": 6,
+      "taxableIncome": 15330,
+      "socialDeduction": 2952,
+      "specialDeduction": 3000,
+      "taxPaid": 131.34,
+      "note": ""
+    },
+    {
+      "id": "month-7",
+      "month": 7,
+      "taxableIncome": 15330,
+      "socialDeduction": 2952,
+      "specialDeduction": 3000,
+      "taxPaid": 131.34,
+      "note": ""
+    }
+  ],
+  "annualBonus": 0,
+  "bonusTaxMode": "separate"
+}

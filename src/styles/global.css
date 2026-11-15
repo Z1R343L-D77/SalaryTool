@@ -1,0 +1,378 @@
+/* ===========================================================
+   Liquid Glass · 暗色
+   多层半透明玻璃、镜面高光、同心圆角、内容在玻璃下滚动。
+   =========================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* —— 底色：留一点冷暖差，模糊才有东西可糊 —— */
+  --bg-base: #0f1216;
+  --bg-tint-1: rgba(80, 130, 255, 0.16);
+  --bg-tint-2: rgba(60, 220, 170, 0.1);
+  --bg-tint-3: rgba(255, 140, 90, 0.08);
+
+  /* —— 玻璃层：暗色着色 + 白色高光，保证任何壁纸上文字都可读 —— */
+  --glass-1: rgba(16, 20, 27, 0.72);       /* 最外层：侧边栏 / 面板 */
+  --glass-2: rgba(22, 27, 35, 0.68);       /* 中间层：卡片 / 控件轨道 */
+  --glass-3: rgba(34, 40, 51, 0.66);       /* 最近观者：输入框 / 悬浮 */
+  --glass-raised: rgba(56, 65, 80, 0.55);  /* 选中行 / 强调块 */
+  --glass-hover: rgba(255, 255, 255, 0.075);
+  --glass-active: rgba(255, 255, 255, 0.11);
+
+  /* —— 镜面高光与描边 —— */
+  --specular-top: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --specular-rim: inset 0 0 0 1px rgba(255, 255, 255, 0.055);
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --divider: rgba(255, 255, 255, 0.07);
+
+  /* —— 文字 —— */
+  --text-strong: rgba(255, 255, 255, 0.95);
+  --text: rgba(255, 255, 255, 0.82);
+  --text-muted: rgba(255, 255, 255, 0.58);
+  --text-faint: rgba(255, 255, 255, 0.38);
+
+  /* —— 系统色 —— */
+  --accent: #0a84ff;
+  --accent-strong: #4aa3ff;
+  --accent-soft: rgba(10, 132, 255, 0.2);
+  --positive: #30d158;
+  --positive-soft: rgba(48, 209, 88, 0.16);
+  --negative: #ff453a;
+  --negative-soft: rgba(255, 69, 58, 0.16);
+  --warning: #ff9f0a;
+  --warning-soft: rgba(255, 159, 10, 0.16);
+
+  /* —— 字体 —— */
+  --font-serif: Georgia, "New York", "Songti SC", "STSong", "SimSun", "Times New Roman", serif;
+  --font-sans: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* —— 同心圆角：内层 = 外层 − 内边距 —— */
+  --radius-window: 18px;
+  --radius-panel: 16px;
+  --radius-card: 14px;
+  --radius-control: 10px;
+  --radius-sm: 8px;
+  --radius-pill: 999px;
+
+  /* —— 玻璃阴影 —— */
+  --shadow-panel: 0 24px 60px -20px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.25);
+  --shadow-popover: 0 20px 50px -12px rgba(0, 0, 0, 0.8);
+  --shadow-control: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+
+  /* —— 动效：只改颜色与不透明度 —— */
+  --transition: color 200ms ease-out, background-color 200ms ease-out,
+    border-color 200ms ease-out, box-shadow 200ms ease-out, opacity 200ms ease-out;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  /* 无边框窗口：底层透明，玻璃层自己画背景 */
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  letter-spacing: -0.005em;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* 浏览器调试时给个底色，桌面里窗口是透明的 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(900px 600px at 12% -8%, var(--bg-tint-1) 0%, transparent 62%),
+    radial-gradient(760px 520px at 96% 6%, var(--bg-tint-2) 0%, transparent 58%),
+    radial-gradient(680px 480px at 70% 104%, var(--bg-tint-3) 0%, transparent 60%),
+    var(--bg-base);
+}
+
+/*
+ * 壁纸层：Liquid Glass 的玻璃需要真实内容做背景才有通透感。
+ * 壁纸本身已经调暗过（见 src/assets/wallpaper.jpg），这里再叠一层压暗，
+ * 保证白色文字在任何区域都有足够对比度。
+ */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: url("../assets/wallpaper.jpg");
+  background-size: cover;
+  background-position: center 58%;
+  background-repeat: no-repeat;
+  /* 四周压暗，中间留出富士山；玻璃叠上去才有层次 */
+  box-shadow: inset 0 0 300px rgba(0, 0, 0, 0.7);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius-pill);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.26);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ============ 玻璃面板 ============ */
+
+.glass {
+  background: var(--glass-1);
+  backdrop-filter: blur(46px) saturate(170%);
+  -webkit-backdrop-filter: blur(46px) saturate(170%);
+  border: 1px solid var(--border);
+  box-shadow: var(--specular-top), var(--specular-rim), var(--shadow-panel);
+}
+
+/* 卡片：嵌在面板里的第二层玻璃 */
+.card {
+  background: var(--glass-2);
+  backdrop-filter: blur(30px) saturate(160%);
+  -webkit-backdrop-filter: blur(30px) saturate(160%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--specular-top), var(--specular-rim);
+  /* 卡片贴合内容高度，下方露出壁纸，玻璃才有东西可透 */
+  align-self: start;
+  width: 100%;
+}
+
+.card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.card__title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-strong);
+}
+
+.card__subtitle {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
+.card__body {
+  padding: 18px;
+}
+
+/* ============ 按钮 ============ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--glass-2);
+  box-shadow: var(--shadow-control);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  transition: var(--transition);
+}
+
+.btn:hover {
+  background-color: var(--glass-hover);
+  border-color: var(--border-strong);
+  color: var(--text-strong);
+}
+
+.btn:active {
+  background-color: var(--glass-active);
+}
+
+.btn--primary {
+  background: linear-gradient(180deg, #3d9bff 0%, #0a84ff 100%);
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 6px 16px -8px rgba(10, 132, 255, 0.9);
+  color: #fff;
+}
+
+.btn--primary:hover {
+  background: linear-gradient(180deg, #56a9ff 0%, #1a8cff 100%);
+  color: #fff;
+}
+
+.btn--ghost {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+}
+
+.btn--ghost:hover {
+  background-color: var(--glass-hover);
+  border-color: transparent;
+  color: var(--text-strong);
+}
+
+.btn--danger:hover {
+  color: var(--negative);
+  border-color: rgba(255, 69, 58, 0.4);
+  background-color: var(--negative-soft);
+}
+
+.btn:disabled {
+  background: var(--glass-1);
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.btn--icon {
+  width: 28px;
+  padding: 0;
+}
+
+.btn--sm {
+  height: 24px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+
+/* ============ 下拉框 ============ */
+
+.select {
+  height: 28px;
+  padding: 0 26px 0 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--glass-2)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='rgba(255,255,255,0.55)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    no-repeat right 8px center;
+  appearance: none;
+  box-shadow: var(--shadow-control);
+  color: var(--text-strong);
+  font-size: 12px;
+  transition: var(--transition);
+}
+
+.select:hover {
+  border-color: var(--border-strong);
+  background-color: var(--glass-hover);
+}
+
+.select:focus {
+  outline: 0;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3);
+}
+
+.select option {
+  background: #1c1c1e;
+  color: var(--text-strong);
+}
+
+/* ============ 标签 ============ */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.tag--accent {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.tag--muted {
+  background: var(--glass-2);
+  color: var(--text-muted);
+}
+
+.tag--positive {
+  background: var(--positive-soft);
+  color: var(--positive);
+}
+
+/* ============ 数值：等宽 ============ */
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.hint {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 159, 10, 0.26);
+  border-radius: var(--radius-sm);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ============ 减弱动态效果 ============ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+}
