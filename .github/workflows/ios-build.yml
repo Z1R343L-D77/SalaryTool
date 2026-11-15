@@ -1,0 +1,90 @@
+name: Build iOS
+
+# iOS 只能由 macOS 编译（Xcode 授权限制），所以用 GitHub 的 macOS runner。
+# 产出的 .ipa 是**未签名**的，需要在 Windows 上用 Sideloadly 等工具自签后装到设备。
+on:
+  workflow_dispatch:        # 手动触发：Actions 页面点 Run workflow
+  push:
+    tags: ["v*"]            # 打 tag 时自动构建
+    paths:
+      - "ios/**"
+      - "shared/**"
+      - ".github/workflows/ios-build.yml"
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ios/package-lock.json
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+
+      - name: 缓存 Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ios/src-tauri -> target
+
+      - name: 安装 CocoaPods
+        run: |
+          brew install cocoapods
+          pod --version
+
+      - name: 安装前端依赖
+        working-directory: ios
+        run: npm ci
+
+      - name: 初始化 iOS 工程
+        working-directory: ios
+        run: npx tauri ios init --ci
+
+      - name: 构建（不签名）
+        working-directory: ios
+        env:
+          # 彻底关掉签名：CI 上没有开发者证书
+          CI: "true"
+        run: |
+          npx tauri build --target aarch64-apple-ios --no-bundle || true
+          # Tauri 的 iOS 产物落在 gen/apple/build/ 下；如果 CLI 走不通，
+          # 下面退回直接调 xcodebuild
+          find src-tauri/gen/apple -name "*.app" -maxdepth 6 2>/dev/null | head
+
+      - name: 打包成未签名 ipa
+        working-directory: ios/src-tauri/gen/apple
+        run: |
+          set -e
+          APP=$(find . -name "*.app" -type d | head -1)
+          if [ -z "$APP" ]; then
+            echo "没找到 .app，尝试 xcodebuild 归档"
+            xcodebuild \
+              -workspace *.xcworkspace \
+              -scheme "$(xcodebuild -workspace *.xcworkspace -list | grep -A1 'Schemes:' | tail -1 | xargs)" \
+              -configuration Release \
+              -sdk iphoneos \
+              -destination 'generic/platform=iOS' \
+              -archivePath build/app.xcarchive \
+              CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+              archive
+            APP=$(find build/app.xcarchive -name "*.app" -type d | head -1)
+          fi
+          echo "APP=$APP"
+          rm -rf Payload && mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qr SalaryTool-unsigned.ipa Payload
+          ls -lh SalaryTool-unsigned.ipa
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: SalaryTool-unsigned-ipa
+          path: ios/src-tauri/gen/apple/SalaryTool-unsigned.ipa
+          if-no-files-found: error
