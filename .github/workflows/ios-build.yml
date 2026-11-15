@@ -11,10 +11,13 @@ on:
 
 jobs:
   build:
-    # macos-14 / macos-latest 在部分账号上会报
-    # "configuration 'xxx-arm64-us-default' is not supported"，
-    # macos-13 是 x86_64 且长期稳定，先用它。
-    runs-on: macos-13
+    # 可选的 macOS runner（截至 2026-11，见 actions/runner-images）：
+    #   macos-15 / macos-26 / macos-latest  → arm64，当前主力
+    #   macos-15-intel / macos-26-intel     → x64
+    #   macos-14                            → 已废弃，macos-13 已下线
+    # 之前用 macos-14 报的 "macos-14-arm64-us-default is not supported"
+    # 是镜像调度问题：该标签在这类账号上解析到了不可用的配置。
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
