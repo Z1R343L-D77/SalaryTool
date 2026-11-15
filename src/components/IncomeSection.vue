@@ -111,8 +111,8 @@ const fundBaseTotal = computed(() =>
 }
 
 .select--sm {
-  height: 28px;
-  font-size: 12px;
+  height: 30px;
+  font-size: var(--fs-label);
 }
 
 .income-list {
@@ -123,10 +123,10 @@ const fundBaseTotal = computed(() =>
 
 .income-row {
   display: grid;
-  grid-template-columns: minmax(90px, 1fr) 132px auto 26px;
-  gap: 8px;
+  grid-template-columns: minmax(90px, 1fr) 138px auto 30px;
+  gap: 10px;
   align-items: center;
-  min-height: 44px;
+  min-height: 46px;
   padding: 0 10px;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -139,28 +139,30 @@ const fundBaseTotal = computed(() =>
 }
 
 .income-row:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--tint-hover);
 }
 
 .income-row:focus-within {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--tint-soft);
 }
 
 .income-row__label {
   height: 30px;
   min-width: 0;
-  padding: 0 6px;
+  padding: 0 7px;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-strong);
-  font-weight: 500;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-body);
   outline: 0;
   transition: var(--transition);
 }
 
 .income-row__label:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--tint-hover);
 }
 
 .income-row__label:focus {
@@ -171,25 +173,18 @@ const fundBaseTotal = computed(() =>
 
 .income-row__flags {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   padding: 0 4px;
 }
 
 .check {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   white-space: nowrap;
-  cursor: pointer;
-}
-
-.check input {
-  width: 14px;
-  height: 14px;
-  accent-color: var(--accent);
-  margin: 0;
   cursor: pointer;
 }
 
@@ -201,20 +196,25 @@ const fundBaseTotal = computed(() =>
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--divider);
-  font-size: 13px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--text-strong);
+}
+
+.income-total strong {
+  font-weight: var(--fw-semibold);
 }
 
 .income-total__muted {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--fs-caption);
 }
 
 .empty {
   padding: 24px;
   text-align: center;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--fs-body);
 }
 
 @media (max-width: 720px) {

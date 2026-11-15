@@ -51,14 +51,16 @@ const total = computed(() => sumSpecialDeductions(props.state.special));
 
 <style scoped>
 .total {
-  font-size: 12px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--text-muted);
   white-space: nowrap;
 }
 
 .total strong {
   color: var(--positive);
-  font-size: 13px;
+  font-size: var(--fs-subhead);
+  font-weight: var(--fw-semibold);
 }
 
 .grid {
@@ -75,13 +77,15 @@ const total = computed(() => sumSpecialDeductions(props.state.special));
 }
 
 .field__label {
-  font-size: 12px;
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-label);
   color: var(--text);
-  font-weight: 550;
 }
 
 .field__hint {
-  font-size: 11px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
   color: var(--text-muted);
 }
 
@@ -89,7 +93,9 @@ const total = computed(() => sumSpecialDeductions(props.state.special));
   margin: 16px 0 0;
   padding-top: 12px;
   border-top: 1px solid var(--divider);
-  font-size: 11px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
+  line-height: var(--lh-body);
   color: var(--text-muted);
 }
 </style>

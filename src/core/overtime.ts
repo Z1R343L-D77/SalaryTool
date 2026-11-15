@@ -1,4 +1,4 @@
-import { round2, toNonNegative } from "./money";
+import { round2, round4, toNonNegative } from "./money";
 import type { DayType } from "./calendar";
 import { buildMonth, flattenMonth, summarizeMonth } from "./calendar";
 
@@ -134,6 +134,44 @@ export function createDefaultOvertimeSync(): OvertimeSyncSettings {
 }
 
 /**
+ * 月薪 → 小时工资：月薪 ÷ 月计薪天数 ÷ 日工时。
+ * 月计薪天数或日工时非法（<= 0）时返回 0，避免除零。
+ */
+export function monthlyToHourly(base: number, monthlyDays: number, dailyHours: number): number {
+  const days = toNonNegative(monthlyDays);
+  const hours = toNonNegative(dailyHours);
+  if (days <= 0 || hours <= 0) return 0;
+  // 保留四位：6700 ÷ 174 = 38.5057，只留两位会让 38.51 × 1.5 变成 57.77（实际 57.7586）
+  return round4(toNonNegative(base) / days / hours);
+}
+
+/**
+ * 小时工资 → 月薪：时薪 × 月计薪天数 × 日工时。
+ *
+ * 与 monthlyToHourly 互为逆运算；参数非法时返回 0。
+ *
+ * 注意：时薪只有两位小数，来回折算会丢精度（5000 ÷ 174 → 28.74 → × 174 = 5000.76）。
+ * 所以这里额外接受一个「当前月薪」：如果它折出来的时薪正好等于 hourlyRate，
+ * 说明这个月薪和时薪本来就一致，直接用原值返回，避免每次同步都往上漂。
+ */
+export function hourlyToMonthly(
+  hourlyRate: number,
+  monthlyDays: number,
+  dailyHours: number,
+  currentBase?: number,
+): number {
+  const days = toNonNegative(monthlyDays);
+  const hours = toNonNegative(dailyHours);
+  if (days <= 0 || hours <= 0) return 0;
+  const rate = round4(toNonNegative(hourlyRate));
+  // 已在同一个值上：保留 currentBase，不让四舍五入的误差累积
+  if (currentBase !== undefined && currentBase > 0 && monthlyToHourly(currentBase, days, hours) === rate) {
+    return round2(currentBase);
+  }
+  return round2(rate * days * hours);
+}
+
+/**
  * 计算用于加班费加成的小时工资（不含倍率）。
  *
  * - 月薪模式：月薪 ÷ 月计薪天数 ÷ 日工时
@@ -141,12 +179,32 @@ export function createDefaultOvertimeSync(): OvertimeSyncSettings {
  */
 export function hourlyBaseOf(input: OvertimeInput | Pick<OvertimeInput, "mode" | "base" | "hourlyRate" | "monthlyDays" | "dailyHours">): number {
   if (input.mode === "hourly") {
-    return round2(toNonNegative(input.hourlyRate));
+    return round4(toNonNegative(input.hourlyRate));
   }
-  const days = toNonNegative(input.monthlyDays);
-  const hours = toNonNegative(input.dailyHours);
-  if (days <= 0 || hours <= 0) return 0;
-  return round2(toNonNegative(input.base) / days / hours);
+  return monthlyToHourly(input.base, input.monthlyDays, input.dailyHours);
+}
+
+/** 三档工时合计。 */
+export interface TierHours {
+  weekdayHours: number;
+  weekendHours: number;
+  holidayHours: number;
+}
+
+/** 把某一自然月的日历汇总成三档工时（不读手工填写的合计）。 */
+export function summarizeCalendarHours(calendar: OvertimeCalendar): TierHours {
+  const weeks = buildMonth({
+    year: calendar.year,
+    month: calendar.month,
+    overrides: calendar.overrides,
+    hours: calendar.hours,
+  });
+  const summary = summarizeMonth(flattenMonth(weeks));
+  return {
+    weekdayHours: summary.workdayHours,
+    weekendHours: summary.restHours,
+    holidayHours: summary.holidayHours,
+  };
 }
 
 /**
@@ -155,24 +213,9 @@ export function hourlyBaseOf(input: OvertimeInput | Pick<OvertimeInput, "mode" |
  * 手工模式直接用填的三档合计；日历模式按当月日历汇总，
  * 这样切换录入方式不会互相覆盖。
  */
-export function resolveHours(input: OvertimeInput): {
-  weekdayHours: number;
-  weekendHours: number;
-  holidayHours: number;
-} {
+export function resolveHours(input: OvertimeInput): TierHours {
   if (input.entryMode === "calendar") {
-    const weeks = buildMonth({
-      year: input.calendar.year,
-      month: input.calendar.month,
-      overrides: input.calendar.overrides,
-      hours: input.calendar.hours,
-    });
-    const summary = summarizeMonth(flattenMonth(weeks));
-    return {
-      weekdayHours: summary.workdayHours,
-      weekendHours: summary.restHours,
-      holidayHours: summary.holidayHours,
-    };
+    return summarizeCalendarHours(input.calendar);
   }
   return {
     weekdayHours: toNonNegative(input.weekdayHours),
@@ -183,9 +226,10 @@ export function resolveHours(input: OvertimeInput): {
 
 export function calcOvertime(input: OvertimeInput): OvertimeResult {
   const hourlyBase = hourlyBaseOf(input);
-  const weekdayRate = round2(hourlyBase * WEEKDAY_RATE);
-  const weekendRate = round2(hourlyBase * WEEKEND_RATE);
-  const holidayRate = round2(hourlyBase * HOLIDAY_RATE);
+  // 单价保留四位：基数本身就是折算值，再乘倍率只会放大误差
+  const weekdayRate = round4(hourlyBase * WEEKDAY_RATE);
+  const weekendRate = round4(hourlyBase * WEEKEND_RATE);
+  const holidayRate = round4(hourlyBase * HOLIDAY_RATE);
 
   const { weekdayHours, weekendHours, holidayHours } = resolveHours(input);
 

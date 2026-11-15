@@ -196,31 +196,7 @@ const basesDiffer = computed(
 </template>
 
 <style scoped>
-.segmented {
-  display: inline-flex;
-  padding: 2px;
-  gap: 2px;
-  border-radius: 8px;
-  background: var(--glass-1);
-}
-
-.segmented button {
-  height: 24px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 550;
-  transition: var(--transition);
-}
-
-.segmented button.active {
-  background: var(--glass-2);
-  color: var(--text-strong);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
-}
+/* 分段控件由 global.css 统一提供，这里只留布局 */
 
 .base-block {
   padding: 12px;
@@ -242,8 +218,9 @@ const basesDiffer = computed(
 }
 
 .base-block__title {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--fs-label);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-label);
   color: var(--text-strong);
 }
 
@@ -259,14 +236,21 @@ const basesDiffer = computed(
 }
 
 .base-block__meta {
-  font-size: 11px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
   color: var(--text-muted);
 }
 
 .auto-hint {
   margin: 8px 0 0;
-  font-size: 11px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
   color: var(--text-muted);
+}
+
+.auto-hint strong {
+  font-weight: var(--fw-semibold);
+  color: var(--text-strong);
 }
 
 .differ-note {
@@ -275,8 +259,9 @@ const basesDiffer = computed(
   border-radius: var(--radius-sm);
   background: var(--accent-soft);
   color: var(--accent-strong);
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
+  line-height: var(--lh-body);
 }
 
 .grid {
@@ -296,8 +281,10 @@ const basesDiffer = computed(
 }
 
 .field__label {
-  font-size: 12px;
-  color: var(--text-muted);
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-label);
+  color: var(--text);
 }
 
 .field--preview {
@@ -309,7 +296,8 @@ const basesDiffer = computed(
   align-items: center;
   height: 34px;
   color: var(--negative);
-  font-size: 15px;
+  font-size: var(--fs-heading);
+  font-weight: var(--fw-semibold);
 }
 
 .summary {
@@ -320,13 +308,15 @@ const basesDiffer = computed(
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid var(--divider);
-  font-size: 12px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--text-muted);
 }
 
 .summary strong {
   color: var(--text-strong);
-  font-size: 13px;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
 }
 
 .summary .dot {
@@ -337,7 +327,9 @@ const basesDiffer = computed(
   margin: 16px 0 0;
   padding-top: 12px;
   border-top: 1px solid var(--divider);
-  font-size: 11px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
+  line-height: var(--lh-body);
   color: var(--text-muted);
 }
 </style>

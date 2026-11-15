@@ -3,12 +3,27 @@
  *
  * 工资、社保、公积金、个税都以「元」为单位、保留两位小数（分）。
  * 所有计算统一走 round2，避免浮点误差在累计过程中被放大。
+ *
+ * 加班费的小时工资是例外：它是「月薪 ÷ 174」折算出来的中间值，
+ * 只留两位会让误差被工时放大（22.32 × 174 = 3883.68，实际 22.325 × 174 = 3884.55），
+ * 所以基数另有一套四位小数的版本。
  */
+
+/** 四舍五入到指定小数位。 */
+export function roundN(value: number, digits: number): number {
+  if (!Number.isFinite(value)) return 0;
+  const factor = 10 ** digits;
+  return Math.round((value + Number.EPSILON) * factor) / factor;
+}
 
 /** 四舍五入到 2 位小数（分）。 */
 export function round2(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+  return roundN(value, 2);
+}
+
+/** 四舍五入到 4 位小数，用于小时工资这类折算出来的中间值。 */
+export function round4(value: number): number {
+  return roundN(value, 4);
 }
 
 /** 限制在 [min, max] 区间内。 */
@@ -38,6 +53,12 @@ const moneyFormatter = new Intl.NumberFormat("zh-CN", {
   maximumFractionDigits: 2,
 });
 
+/** 小时工资用：保留四位小数，末尾的 0 去掉（22.3250 → 22.325）。 */
+const preciseFormatter = new Intl.NumberFormat("zh-CN", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 4,
+});
+
 const integerFormatter = new Intl.NumberFormat("zh-CN", {
   maximumFractionDigits: 0,
 });
@@ -45,6 +66,16 @@ const integerFormatter = new Intl.NumberFormat("zh-CN", {
 /** 12345.6 -> "12,345.60" */
 export function formatMoney(value: number): string {
   return moneyFormatter.format(round2(value));
+}
+
+/**
+ * 12345.6789 -> "12,345.6789"
+ *
+ * 用于小时工资、单价这类折算出来的值。金额本身仍然只到分，
+ * 但折算基数要到厘以下才不至于让误差被工时放大。
+ */
+export function formatPrecise(value: number): string {
+  return preciseFormatter.format(round4(value));
 }
 
 /** 12345.6 -> "12,346" */

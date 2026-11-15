@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import DeductionSection from "./components/DeductionSection.vue";
 import ImportDialog from "./components/ImportDialog.vue";
 import IncomeSection from "./components/IncomeSection.vue";
 import OvertimeSection from "./components/OvertimeSection.vue";
 import ResultPanel from "./components/ResultPanel.vue";
+import SettingsDialog from "./components/SettingsDialog.vue";
 import SocialInsuranceSection from "./components/SocialInsuranceSection.vue";
 import SpecialDeductionSection from "./components/SpecialDeductionSection.vue";
 import YtdSection from "./components/YtdSection.vue";
 import { exportState } from "./core/storage";
 import { saveFile } from "./core/platform";
+import { getVersion } from "./core/version";
 import { closeWindow, minimizeWindow, toggleMaximizeOnDoubleClick, toggleMaximizeWindow } from "./core/window";
 import {
   DEDUCTION_PRESETS,
@@ -29,8 +31,14 @@ import {
 
 const incomePreset = ref(0);
 const deductionPreset = ref(0);
-const showReset = ref(false);
 const showImport = ref(false);
+const showSettings = ref(false);
+
+const appVersion = ref("0.2.0");
+
+onMounted(async () => {
+  appVersion.value = await getVersion();
+});
 
 /** 侧边栏栏目：左侧选中哪一项，中间就只显示哪一项。 */
 const SECTIONS = [
@@ -47,9 +55,9 @@ type SectionId = (typeof SECTIONS)[number]["id"];
 const activeSection = ref<SectionId>("income");
 const activeMeta = computed(() => SECTIONS.find((s) => s.id === activeSection.value) ?? SECTIONS[0]);
 
-function confirmReset(): void {
+/** 重置工资数据（外观设置保留）。由设置面板里的「重置所有数据」调用。 */
+function resetData(): void {
   resetAll();
-  showReset.value = false;
   toast("已重置为示例配置");
 }
 
@@ -190,9 +198,47 @@ async function onMaximize(): Promise<void> {
         </nav>
 
         <div class="sidebar__foot">
-          <button class="btn btn--sm btn--ghost sidebar__reset" type="button" @click="showReset = true">
-            重置数据
-          </button>
+          <!-- 仿常见桌面应用的底栏：左边身份 + 右边设置入口 -->
+          <div class="account">
+            <span class="account__avatar" aria-hidden="true">
+              <svg viewBox="0 0 32 32">
+                <defs>
+                  <linearGradient id="sideBrand" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color="#5aa8ff" />
+                    <stop offset="100%" stop-color="#0a6cff" />
+                  </linearGradient>
+                </defs>
+                <rect width="32" height="32" rx="9" fill="url(#sideBrand)" />
+                <path
+                  d="M10.5 9.5 16 18.5 21.5 9.5M16 18.5V23M12.6 17h6.8M12.6 20.4h6.8"
+                  fill="none"
+                  stroke="#fff"
+                  stroke-width="1.9"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </span>
+            <span class="account__text">
+              <span class="account__name">工资单</span>
+              <span class="account__meta">v{{ appVersion }}</span>
+            </span>
+            <button
+              class="btn btn--ghost btn--icon account__settings"
+              type="button"
+              title="设置"
+              aria-label="设置"
+              :aria-expanded="showSettings"
+              @click="showSettings = true"
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <circle cx="10" cy="10" r="2.6" />
+                <path
+                  d="M8.52 1.9h2.96l.34 1.72c.46.15.9.36 1.3.62l1.58-.78 2.1 2.1-.78 1.58c.26.4.47.84.62 1.3l1.72.34v2.96l-1.72.34c-.15.46-.36.9-.62 1.3l.78 1.58-2.1 2.1-1.58-.78c-.4.26-.84.47-1.3.62l-.34 1.72H8.52l-.34-1.72c-.46-.15-.9-.36-1.3-.62l-1.58.78-2.1-2.1.78-1.58a6.8 6.8 0 0 1-.62-1.3L1.9 11.48V8.52l1.72-.34c.15-.46.36-.9.62-1.3l-.78-1.58 2.1-2.1 1.58.78c.4-.26.84-.47 1.3-.62L8.52 1.9Z"
+                />
+              </svg>
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -232,18 +278,14 @@ async function onMaximize(): Promise<void> {
       </aside>
     </div>
 
-    <div v-if="showReset" class="modal" role="dialog" aria-modal="true" @click.self="showReset = false">
-      <div class="modal__panel glass">
-        <h2 class="modal__title">重置所有数据？</h2>
-        <p class="modal__text">会清空当前填写的收入、社保与累计数据，恢复为示例配置。</p>
-        <div class="modal__actions">
-          <button class="btn" type="button" @click="showReset = false">取消</button>
-          <button class="btn btn--primary" type="button" @click="confirmReset">确认重置</button>
-        </div>
-      </div>
-    </div>
-
     <ImportDialog :open="showImport" @close="showImport = false" @import="handleImport" />
+
+    <SettingsDialog
+      :open="showSettings"
+      :version="appVersion"
+      :on-reset-data="resetData"
+      @close="showSettings = false"
+    />
 
     <Transition name="toast">
       <div v-if="toastText" class="toast" role="status" aria-live="polite">{{ toastText }}</div>
@@ -262,7 +304,7 @@ async function onMaximize(): Promise<void> {
   overflow: hidden;
   background: transparent;
   /* 系统透明窗口下自己描一圈极淡的边，让窗口边缘可辨 */
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px var(--window-edge);
 }
 
 /* ============ 标题栏 ============ */
@@ -274,7 +316,7 @@ async function onMaximize(): Promise<void> {
   gap: 12px;
   height: 46px;
   padding: 0 14px;
-  background: rgba(16, 19, 25, 0.42);
+  background: var(--glass-1);
   backdrop-filter: blur(40px) saturate(170%);
   -webkit-backdrop-filter: blur(40px) saturate(170%);
   border-bottom: 1px solid var(--divider);
@@ -349,15 +391,17 @@ async function onMaximize(): Promise<void> {
   gap: 6px;
   flex: 1;
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
 }
 
 .titlebar__app {
-  font-family: var(--font-serif);
-  font-size: 13px;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-heading);
   color: var(--text-strong);
 }
 
@@ -366,7 +410,7 @@ async function onMaximize(): Promise<void> {
 }
 
 .titlebar__section {
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-strong);
 }
 
@@ -386,9 +430,9 @@ async function onMaximize(): Promise<void> {
   background: var(--accent-soft);
   border: 1px solid rgba(10, 132, 255, 0.24);
   color: var(--accent-strong);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-caption);
   white-space: nowrap;
 }
 
@@ -421,18 +465,17 @@ async function onMaximize(): Promise<void> {
 
 .sidebar__title {
   margin: 0;
-  font-family: var(--font-serif);
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
+  font-size: var(--fs-title);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-title);
+  letter-spacing: var(--ls-title);
   color: var(--text-strong);
 }
 
 .sidebar__sub {
-  margin: 2px 0 0;
-  font-size: 11px;
-  letter-spacing: 0.02em;
+  margin: 3px 0 0;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
   color: var(--text-muted);
 }
 
@@ -464,8 +507,8 @@ async function onMaximize(): Promise<void> {
 
 .nav__row.is-active {
   background: var(--glass-raised);
-  border-color: rgba(255, 255, 255, 0.2);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 10px 24px -14px rgba(0, 0, 0, 0.8);
+  border-color: var(--border-strong);
+  box-shadow: inset 0 1px 0 var(--hero-highlight), 0 10px 24px -14px rgba(0, 0, 0, 0.6);
   color: var(--text-strong);
 }
 
@@ -477,14 +520,14 @@ async function onMaximize(): Promise<void> {
 }
 
 .nav__label {
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: -0.005em;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-body);
 }
 
 .nav__hint {
-  font-size: 10px;
-  letter-spacing: 0.01em;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
   color: var(--text-faint);
   white-space: nowrap;
   overflow: hidden;
@@ -497,7 +540,8 @@ async function onMaximize(): Promise<void> {
 
 .nav__badge {
   flex: none;
-  font-size: 10px;
+  font-size: var(--fs-caption);
+  letter-spacing: 0;
   color: var(--text-faint);
 }
 
@@ -511,8 +555,77 @@ async function onMaximize(): Promise<void> {
   border-top: 1px solid var(--divider);
 }
 
-.sidebar__reset {
+/* —— 底栏：左下角身份 + 右边设置 —— */
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 4px 2px;
+  border-radius: var(--radius-control);
+  transition: var(--transition);
+}
+
+.account:hover {
+  background-color: var(--glass-hover);
+}
+
+.account__avatar {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.account__avatar svg {
+  display: block;
   width: 100%;
+  height: 100%;
+}
+
+.account__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  flex: 1;
+}
+
+.account__name {
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-label);
+  color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account__meta {
+  font-size: var(--fs-micro);
+  letter-spacing: 0;
+  color: var(--text-faint);
+}
+
+.account__settings {
+  flex: none;
+}
+
+.account__settings svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+/* 设置面板打开时齿轮保持高亮，便于一眼看出面板来自哪里 */
+.account__settings[aria-expanded="true"] {
+  color: var(--text-strong);
+  background-color: var(--glass-active);
 }
 
 /* —— 中间舞台：每次只挂载一个栏目 —— */
@@ -558,7 +671,7 @@ async function onMaximize(): Promise<void> {
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--backdrop-dim);
   backdrop-filter: blur(6px);
 }
 
@@ -571,15 +684,15 @@ async function onMaximize(): Promise<void> {
 
 .modal__title {
   margin: 0 0 8px;
-  font-family: var(--font-serif);
-  font-size: 18px;
-  font-weight: 700;
+  font-size: var(--fs-heading);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-heading);
   color: var(--text-strong);
 }
 
 .modal__text {
   margin: 0 0 16px;
-  font-size: 13px;
+  font-size: var(--fs-body);
   color: var(--text-muted);
 }
 
@@ -597,15 +710,17 @@ async function onMaximize(): Promise<void> {
   bottom: 24px;
   z-index: 200;
   max-width: min(560px, calc(100vw - 40px));
-  padding: 9px 14px;
+  padding: 10px 15px;
   border-radius: var(--radius-control);
-  background: rgba(24, 28, 36, 0.92);
+  background: var(--menu-bg);
   backdrop-filter: blur(26px) saturate(180%);
   border: 1px solid var(--border-strong);
   box-shadow: var(--specular-top), var(--shadow-popover);
   color: var(--text-strong);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-label);
+  line-height: var(--lh-body);
   transform: translateX(-50%);
   word-break: break-all;
 }

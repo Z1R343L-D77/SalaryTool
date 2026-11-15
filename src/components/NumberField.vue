@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { round2, toAmount } from "../core/money";
+import { roundN, toAmount } from "../core/money";
 /**
  * 金额 / 百分比输入框。
  *
  * - 金额模式：失焦时显示千分位与两位小数，聚焦时显示纯数字，方便编辑
  * - 百分比模式：内部存小数（0.08），界面显示 8（%）
+ * - precision：非编辑态保留几位小数，默认 2。加班费的小时工资是折算出来的中间值，
+ *   用 4 位才不会让误差被工时放大。
  */
 const props = withDefaults(
   defineProps<{
@@ -17,8 +19,9 @@ const props = withDefaults(
     disabled?: boolean;
     placeholder?: string;
     align?: "left" | "right";
+    precision?: number;
   }>(),
-  { mode: "money", min: 0, align: "right" },
+  { mode: "money", min: 0, align: "right", precision: 2 },
 );
 
 const emit = defineEmits<{ "update:modelValue": [value: number] }>();
@@ -30,19 +33,30 @@ const ratio = computed(() => (props.mode === "percent" ? 100 : 1));
 const suffixText = computed(() => props.suffix ?? (props.mode === "percent" ? "%" : "元"));
 const safeValue = computed(() => toAmount(props.modelValue));
 
+/** 编辑态下不带千分位的纯数字，超出精度的部分截掉。 */
 function plain(value: number): string {
-  const scaled = round2(value * ratio.value);
-  return scaled % 1 === 0 ? String(scaled) : scaled.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  const scaled = roundN(value * ratio.value, props.precision);
+  return scaled % 1 === 0
+    ? String(scaled)
+    : scaled
+        .toFixed(props.precision)
+        .replace(/0+$/, "")
+        .replace(/\.$/, "");
 }
 
-const moneyDisplay = new Intl.NumberFormat("zh-CN", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+const moneyDisplay = computed(
+  () =>
+    new Intl.NumberFormat("zh-CN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: props.precision,
+    }),
+);
 
 /** 非编辑态下的展示值：金额带千分位，百分比为纯数字。 */
 const formatted = computed(() =>
-  props.mode === "percent" ? plain(safeValue.value) : moneyDisplay.format(round2(safeValue.value)),
+  props.mode === "percent"
+    ? plain(safeValue.value)
+    : moneyDisplay.value.format(roundN(safeValue.value, props.precision)),
 );
 
 const display = computed(() => (focused.value ? draft.value : formatted.value));
@@ -51,7 +65,8 @@ function clampValue(value: number): number {
   let next = value;
   if (props.min !== undefined) next = Math.max(props.min, next);
   if (props.max !== undefined) next = Math.min(props.max, next);
-  return round2(next);
+  // 精度与展示一致：4 位精度的字段存 4 位，不要在这里截成 2 位
+  return roundN(next, props.precision);
 }
 
 function onFocus(event: FocusEvent): void {
@@ -82,7 +97,7 @@ function onKeydown(event: KeyboardEvent): void {
     const step = props.mode === "percent" ? 0.5 : 100;
     const delta = event.key === "ArrowUp" ? step : -step;
     const next = toAmount(draft.value, 0) + delta;
-    draft.value = String(Math.round(next * 100) / 100);
+    draft.value = String(roundN(next, props.precision));
     emit("update:modelValue", clampValue(next / ratio.value));
   }
 }
@@ -113,11 +128,12 @@ function onKeydown(event: KeyboardEvent): void {
   align-items: center;
   gap: 6px;
   min-width: 0;
-  padding: 0 9px;
-  height: 28px;
+  padding: 0 10px;
+  height: 30px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--glass-2);
+  box-shadow: inset 0 1px 0 var(--specular-top);
   transition: var(--transition);
 }
 
@@ -127,12 +143,14 @@ function onKeydown(event: KeyboardEvent): void {
 
 .number-field:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.28);
+  background-color: var(--tint-hover);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3);
 }
 
 .number-field.is-disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   background: transparent;
+  box-shadow: none;
 }
 
 .number-field__input {
@@ -143,8 +161,10 @@ function onKeydown(event: KeyboardEvent): void {
   outline: 0;
   background: transparent;
   color: var(--text-strong);
-  font-family: var(--font-mono);
-  font-size: 13px;
+  /* 数字走正文字体的 tabular 数字，不再切到控制台等宽字体 */
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
   text-align: right;
@@ -158,6 +178,7 @@ function onKeydown(event: KeyboardEvent): void {
 .number-field__prefix {
   flex: none;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
 }
 </style>

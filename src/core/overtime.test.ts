@@ -6,6 +6,9 @@ import {
   createDefaultOvertime,
   equivalentWeekdayHours,
   hourlyBaseOf,
+  hourlyToMonthly,
+  monthlyToHourly,
+  summarizeCalendarHours,
 } from "./overtime";
 import type { OvertimeInput } from "./overtime";
 
@@ -132,5 +135,108 @@ describe("模式默认值", () => {
     expect(input.hourlyRate).toBe(0);
     expect(input.monthlyDays).toBe(DEFAULT_MONTHLY_DAYS);
     expect(input.dailyHours).toBe(DEFAULT_DAILY_HOURS);
+  });
+});
+
+describe("月薪 ↔ 时薪互转", () => {
+  it("月薪折算成时薪", () => {
+    // 8700 / 21.75 / 8 = 50
+    expect(monthlyToHourly(8700, 21.75, 8)).toBe(50);
+  });
+
+  it("时薪折回月薪", () => {
+    // 50 × 21.75 × 8 = 8700
+    expect(hourlyToMonthly(50, 21.75, 8)).toBe(8700);
+  });
+
+  it("两者互为逆运算", () => {
+    for (const base of [5000, 6700, 8700, 15000, 23333.33]) {
+      const rate = monthlyToHourly(base, DEFAULT_MONTHLY_DAYS, DEFAULT_DAILY_HOURS);
+      // 传入原月薪：时薪折出来和它一致时保留原值，不让两位小数的误差往上漂
+      expect(hourlyToMonthly(rate, DEFAULT_MONTHLY_DAYS, DEFAULT_DAILY_HOURS, base)).toBe(base);
+    }
+  });
+
+  it("不传原月薪时按纯折算（会有分位误差）", () => {
+    // 5000 / 174 = 28.74 → 28.74 × 174 = 5000.76
+    expect(hourlyToMonthly(28.74, 21.75, 8)).toBe(5000.76);
+  });
+
+  it("时薪真的改了才用折算值，不会被原月薪卡住", () => {
+    // 原月薪 15000（时薪 86.21），改成时薪 90 → 应该得到 90 × 174 = 15660
+    expect(hourlyToMonthly(90, 21.75, 8, 15000)).toBe(15660);
+  });
+
+  it("手填的时薪 22.32 折算回月薪", () => {
+    // 22.32 × 21.75 × 8 = 3883.68
+    expect(hourlyToMonthly(22.32, 21.75, 8)).toBe(3883.68);
+  });
+
+  it("计薪天数或日工时为 0 时都返回 0", () => {
+    expect(monthlyToHourly(8700, 0, 8)).toBe(0);
+    expect(monthlyToHourly(8700, 21.75, 0)).toBe(0);
+    expect(hourlyToMonthly(50, 0, 8)).toBe(0);
+    expect(hourlyToMonthly(50, 21.75, 0)).toBe(0);
+  });
+
+  it("负数按 0 处理", () => {
+    expect(monthlyToHourly(-8700, 21.75, 8)).toBe(0);
+    expect(hourlyToMonthly(-50, 21.75, 8)).toBe(0);
+  });
+});
+
+describe("日历汇总", () => {
+  const withCalendar = (
+    hours: Record<string, number>,
+    overrides: Record<string, "workday" | "rest" | "holiday"> = {},
+  ): OvertimeInput => ({
+    ...createDefaultOvertime(8700),
+    entryMode: "calendar",
+    calendar: { year: 2026, month: 11, hours, overrides },
+  });
+
+  it("按日期自动分档汇总", () => {
+    // 2026-11-16 周一（工作日）、11-14 周六（休息日）、11-17 周二（工作日）
+    const r = summarizeCalendarHours(withCalendar({
+      "2026-11-16": 2,
+      "2026-11-14": 4,
+      "2026-11-17": 3,
+    }).calendar);
+    expect(r.weekdayHours).toBe(5);
+    expect(r.weekendHours).toBe(4);
+    expect(r.holidayHours).toBe(0);
+  });
+
+  it("手动改档位会改变汇总到哪一档", () => {
+    const r = summarizeCalendarHours(
+      withCalendar({ "2026-11-16": 8 }, { "2026-11-16": "holiday" }).calendar,
+    );
+    expect(r.weekdayHours).toBe(0);
+    expect(r.holidayHours).toBe(8);
+  });
+
+  it("日历模式下 calcOvertime 用日历汇总，不用手填的合计", () => {
+    const input = {
+      ...withCalendar({ "2026-11-16": 2 }),
+      weekdayHours: 100, // 手填的合计不该参与计算
+    };
+    const r = calcOvertime(input);
+    expect(r.totalHours).toBe(2);
+    // 时薪 50 × 1.5 × 2 小时 = 150
+    expect(r.totalPay).toBe(150);
+  });
+
+  it("日历为空时汇总为 0", () => {
+    const r = summarizeCalendarHours(withCalendar({}).calendar);
+    expect(r.weekdayHours + r.weekendHours + r.holidayHours).toBe(0);
+  });
+
+  it("手工模式下忽略日历数据", () => {
+    const input = {
+      ...withCalendar({ "2026-11-16": 8 }),
+      entryMode: "manual" as const,
+      weekdayHours: 3,
+    };
+    expect(calcOvertime(input).totalHours).toBe(3);
   });
 });

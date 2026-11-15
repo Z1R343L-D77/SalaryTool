@@ -78,8 +78,8 @@ const total = computed(() => round2(props.items.reduce((sum, item) => sum + item
 }
 
 .select--sm {
-  height: 28px;
-  font-size: 12px;
+  height: 30px;
+  font-size: var(--fs-label);
 }
 
 .list {
@@ -90,12 +90,13 @@ const total = computed(() => round2(props.items.reduce((sum, item) => sum + item
 
 .row {
   display: grid;
-  grid-template-columns: minmax(90px, 1fr) 132px auto 34px;
-  gap: 8px;
+  grid-template-columns: minmax(90px, 1fr) 138px auto 34px;
+  gap: 10px;
   align-items: center;
   padding: 8px;
   border-radius: var(--radius-control);
   background: var(--glass-2);
+  border: 1px solid var(--border);
 }
 
 .row__label {
@@ -106,16 +107,19 @@ const total = computed(() => round2(props.items.reduce((sum, item) => sum + item
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-strong);
-  font-weight: 550;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-body);
   outline: 0;
+  transition: var(--transition);
 }
 
 .row__label:hover {
-  background: var(--surface);
+  background: var(--tint-hover);
 }
 
 .row__label:focus {
-  background: var(--surface);
+  background: var(--glass-2);
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
@@ -123,18 +127,11 @@ const total = computed(() => round2(props.items.reduce((sum, item) => sum + item
 .check {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   white-space: nowrap;
-  cursor: pointer;
-}
-
-.check input {
-  width: 14px;
-  height: 14px;
-  accent-color: var(--accent);
-  margin: 0;
   cursor: pointer;
 }
 
@@ -143,15 +140,20 @@ const total = computed(() => round2(props.items.reduce((sum, item) => sum + item
   padding-top: 12px;
   border-top: 1px solid var(--divider);
   text-align: right;
-  font-size: 13px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--text-strong);
+}
+
+.total strong {
+  font-weight: var(--fw-semibold);
 }
 
 .empty {
   padding: 20px;
   text-align: center;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--fs-body);
 }
 
 @media (max-width: 720px) {

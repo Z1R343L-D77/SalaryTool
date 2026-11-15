@@ -302,23 +302,20 @@ const previewSum = computed(() => computeYtdFromMonths(props.state.months, props
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--text-muted);
 }
 
 .month-picker .select {
-  height: 28px;
+  height: 30px;
   min-width: 68px;
-  font-size: 12px;
+  font-size: var(--fs-label);
 }
 
-.segmented {
-  display: inline-flex;
-  padding: 3px;
-  gap: 2px;
-  border-radius: 10px;
-  background: var(--glass-1);
-  border: 1px solid var(--border);
+/* 顶部「手填 / 按月记录」这组与下方内容之间留出间距；
+   分段控件本体样式在 global.css 里，不再重复定义 */
+.card__body > .segmented {
   margin-bottom: 14px;
 }
 
@@ -341,13 +338,10 @@ const previewSum = computed(() => computeYtdFromMonths(props.state.months, props
 }
 
 .deduction-block__title {
-  font-size: 12px;
-  font-weight: 550;
+  font-size: var(--fs-label);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-label);
   color: var(--text-strong);
-}
-
-.deduction-block__head .segmented {
-  margin-bottom: 0;
 }
 
 .deduction-block__row {
@@ -360,56 +354,38 @@ const previewSum = computed(() => computeYtdFromMonths(props.state.months, props
 }
 
 .deduction-block__calc {
-  font-size: 12px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--text-muted);
 }
 
 .deduction-block__calc strong {
   color: var(--text-strong);
-  font-size: 13px;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
 }
 
 .deduction-block__input {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--text-muted);
 }
 
 .select--employed {
-  height: 26px;
+  height: 28px;
   min-width: 64px;
-  font-size: 12px;
+  font-size: var(--fs-label);
 }
 
 .deduction-block__hint {
   margin: 10px 0 0;
-  font-size: 11px;
-  line-height: 1.6;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
+  line-height: var(--lh-body);
   color: var(--text-muted);
-}
-
-.segmented--sm {
-  margin-bottom: 0;
-}
-
-.segmented button {
-  height: 26px;
-  padding: 0 11px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 550;
-  transition: var(--transition);
-}
-
-.segmented button.active {
-  background: var(--glass-2);
-  color: var(--text-strong);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
 }
 
 .grid {
@@ -426,21 +402,24 @@ const previewSum = computed(() => computeYtdFromMonths(props.state.months, props
 }
 
 .field__label {
-  font-size: 12px;
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-label);
   color: var(--text);
-  font-weight: 550;
 }
 
 .field__hint {
-  font-size: 11px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
   color: var(--text-muted);
 }
 
 .records-hint {
   margin: 0 0 12px;
-  font-size: 12px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--text-muted);
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 
 .table-wrap {
@@ -453,14 +432,15 @@ const previewSum = computed(() => computeYtdFromMonths(props.state.months, props
   width: 100%;
   min-width: 620px;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
 }
 
 .records th {
-  padding: 8px 10px;
+  padding: 9px 10px;
   background: var(--glass-2);
   color: var(--text-muted);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   text-align: left;
   white-space: nowrap;
   border-bottom: 1px solid var(--border);
@@ -482,9 +462,9 @@ const previewSum = computed(() => computeYtdFromMonths(props.state.months, props
 }
 
 .records tfoot td {
-  padding: 8px 10px;
+  padding: 9px 10px;
   background: var(--glass-2);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-strong);
   border-top: 1px solid var(--border);
   white-space: nowrap;
@@ -501,10 +481,10 @@ const previewSum = computed(() => computeYtdFromMonths(props.state.months, props
 }
 
 .select--xs {
-  height: 34px;
+  height: 30px;
   width: 62px;
   padding: 0 22px 0 8px;
-  font-size: 12px;
+  font-size: var(--fs-label);
 }
 
 .empty {
@@ -519,12 +499,14 @@ const previewSum = computed(() => computeYtdFromMonths(props.state.months, props
   flex-wrap: wrap;
   gap: 8px 12px;
   margin-top: 10px;
-  font-size: 12px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--text-muted);
 }
 
 .records-actions__sum strong {
   color: var(--text-strong);
+  font-weight: var(--fw-semibold);
 }
 
 .records-warn {
@@ -533,7 +515,8 @@ const previewSum = computed(() => computeYtdFromMonths(props.state.months, props
   border-radius: var(--radius-sm);
   background: var(--warning-soft);
   color: var(--warning);
-  font-size: 11px;
+  font-size: var(--fs-caption);
+  line-height: var(--lh-body);
 }
 
 .bonus {
@@ -561,12 +544,9 @@ const previewSum = computed(() => computeYtdFromMonths(props.state.months, props
   margin: 16px 0 0;
   padding-top: 12px;
   border-top: 1px solid var(--divider);
-  font-size: 11px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
+  line-height: var(--lh-body);
   color: var(--text-muted);
-}
-
-.btn--icon {
-  width: 28px;
-  padding: 0;
 }
 </style>

@@ -198,45 +198,41 @@ const parts = computed(() => {
   padding: 16px;
   border-radius: var(--radius-card);
   /* 主数字区：一层更亮的玻璃，像贴在面板上的一块镜片 */
-  background: linear-gradient(
-    168deg,
-    rgba(255, 255, 255, 0.14) 0%,
-    rgba(255, 255, 255, 0.05) 46%,
-    rgba(255, 255, 255, 0.02) 100%
-  );
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 10px 28px -18px rgba(0, 0, 0, 0.8);
+  background: var(--hero-glass);
+  border: 1px solid var(--hero-border);
+  box-shadow: inset 0 1px 0 var(--hero-highlight), var(--hero-shadow);
 }
 
 .result__label {
-  font-size: 11px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
   color: var(--text-muted);
-  letter-spacing: 0.02em;
 }
 
 .result__amount {
   display: flex;
   align-items: baseline;
-  gap: 4px;
-  margin-top: 4px;
-  font-family: var(--font-serif);
-  font-size: 32px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: var(--fs-display);
+  font-weight: var(--fw-semibold);
+  /* 大号金额用光学尺寸更大的那一段字形：笔画更收，数字更挺 */
+  font-optical-sizing: auto;
+  line-height: var(--lh-display);
+  letter-spacing: var(--ls-display);
   color: var(--text-strong);
-  line-height: 1.15;
-  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.35);
+  text-shadow: var(--text-shadow-lg);
 }
 
 .result__amount .num {
-  font-family: var(--font-serif);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+  font-weight: inherit;
+  letter-spacing: inherit;
 }
 
 .result__currency {
-  font-size: 17px;
-  font-weight: 400;
+  font-size: 18px;
+  font-weight: var(--fw-regular);
+  letter-spacing: 0;
   color: var(--text-muted);
 }
 
@@ -245,8 +241,9 @@ const parts = computed(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin-top: 6px;
-  font-size: 12px;
+  margin-top: 8px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
   color: var(--text-muted);
 }
 
@@ -260,8 +257,8 @@ const parts = computed(() => {
   margin-top: 12px;
   border-radius: var(--radius-pill);
   overflow: hidden;
-  background: rgba(0, 0, 0, 0.28);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+  background: var(--tint-inset);
+  box-shadow: inset 0 1px 2px var(--tint-inset-strong);
 }
 
 .ratio-bar__seg {
@@ -274,7 +271,8 @@ const parts = computed(() => {
   flex-wrap: wrap;
   gap: 4px 12px;
   margin-top: 8px;
-  font-size: 11px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
   color: var(--text-muted);
 }
 
@@ -292,7 +290,7 @@ const parts = computed(() => {
 
 .ratio-legend__item strong {
   color: var(--text);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 
 .result__kpis {
@@ -310,18 +308,19 @@ const parts = computed(() => {
   flex-direction: column;
   gap: 2px;
   padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--tint-faint);
 }
 
 .kpi__label {
-  font-size: 11px;
-  letter-spacing: 0.02em;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
   color: var(--text-muted);
 }
 
 .kpi__value {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--fs-subhead);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-label);
   color: var(--text-strong);
 }
 
@@ -329,8 +328,9 @@ const parts = computed(() => {
   padding: 10px 12px;
   border-radius: var(--radius-control);
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.045);
-  font-size: 12px;
+  background: var(--tint-soft);
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
 }
 
 .bonus-card__row {
@@ -379,8 +379,9 @@ const parts = computed(() => {
   padding: 4px 0;
   margin-bottom: 2px;
   border-bottom: 1px solid var(--divider);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--fs-label);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-label);
   color: var(--text-strong);
 }
 
@@ -389,13 +390,14 @@ const parts = computed(() => {
   justify-content: space-between;
   gap: 12px;
   padding: 4px 0;
-  font-size: 12px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--text);
 }
 
 .breakdown__row--meta {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--fs-caption);
 }
 
 .breakdown__name {
@@ -405,15 +407,17 @@ const parts = computed(() => {
 }
 
 .breakdown__hint {
-  font-size: 10px;
+  font-size: var(--fs-caption);
   font-style: normal;
+  letter-spacing: var(--ls-caption);
   color: var(--text-faint);
 }
 
 .result__foot {
   padding-top: 10px;
   border-top: 1px solid var(--divider);
-  font-size: 11px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
   color: var(--text-faint);
   text-align: center;
 }

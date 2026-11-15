@@ -11,7 +11,7 @@ import {
   flattenMonth,
   summarizeMonth,
 } from "../core/calendar";
-import { formatMoney } from "../core/money";
+import { formatMoney, formatPrecise } from "../core/money";
 
 /**
  * 加班日历：按天填工时，自动按日期判断工作日 / 休息日 / 法定节假日。
@@ -237,15 +237,15 @@ const monthTotalPay = computed(() =>
 
     <div class="calendar__summary">
       <div class="summary-item summary-item--workday">
-        <span class="summary-item__label">工作日 {{ formatMoney(weekdayRate) }}/h</span>
+        <span class="summary-item__label">工作日 {{ formatPrecise(weekdayRate) }}/h</span>
         <span class="summary-item__value num">{{ summary.workdayHours }} 小时</span>
       </div>
       <div class="summary-item summary-item--rest">
-        <span class="summary-item__label">休息日 {{ formatMoney(weekendRate) }}/h</span>
+        <span class="summary-item__label">休息日 {{ formatPrecise(weekendRate) }}/h</span>
         <span class="summary-item__value num">{{ summary.restHours }} 小时</span>
       </div>
       <div class="summary-item summary-item--holiday">
-        <span class="summary-item__label">节假日 {{ formatMoney(holidayRate) }}/h</span>
+        <span class="summary-item__label">节假日 {{ formatPrecise(holidayRate) }}/h</span>
         <span class="summary-item__value num">{{ summary.holidayHours }} 小时</span>
       </div>
       <div class="summary-item summary-item--total">
@@ -302,20 +302,22 @@ const monthTotalPay = computed(() =>
 }
 
 .calendar__quick-label {
-  font-size: 11px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
   color: var(--text-muted);
 }
 
 .calendar__quick-input {
-  width: 56px;
-  height: 24px;
+  width: 58px;
+  height: 26px;
   padding: 0 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--glass-2);
   color: var(--text-strong);
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: inherit;
+  font-size: var(--fs-label);
+  font-variant-numeric: tabular-nums;
   text-align: right;
   outline: 0;
 }
@@ -338,10 +340,11 @@ const monthTotalPay = computed(() =>
 }
 
 .calendar__head-cell {
-  padding: 6px 0;
+  padding: 7px 0;
   text-align: center;
-  font-size: 11px;
-  letter-spacing: 0.02em;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-caption);
   color: var(--text-muted);
 }
 
@@ -377,7 +380,7 @@ const monthTotalPay = computed(() =>
 }
 
 .day--rest {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--tint-faint);
 }
 
 .day--holiday {
@@ -401,20 +404,21 @@ const monthTotalPay = computed(() =>
 }
 
 .day__num {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-medium);
+  font-variant-numeric: tabular-nums;
   color: var(--text-muted);
 }
 
 .day__type {
   width: 16px;
-  height: 14px;
+  height: 15px;
   padding: 0;
   border: 0;
-  border-radius: 3px;
+  border-radius: 4px;
   background: transparent;
   color: var(--text-faint);
-  font-size: 9px;
+  font-size: var(--fs-micro);
   line-height: 1;
   transition: var(--transition);
 }
@@ -434,23 +438,32 @@ const monthTotalPay = computed(() =>
 
 .day__hours {
   width: 100%;
-  height: 20px;
+  height: 21px;
   padding: 0 4px;
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
   color: var(--text-strong);
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: inherit;
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
   text-align: right;
   outline: 0;
   transition: var(--transition);
 }
 
+/*
+ * 空格子的占位符只在悬停时出现。
+ * 31 个格子各挂一个「工时」二字，整块日历会显得像一张未填的表单；
+ * 需要提示的地方用顶部的批量按钮和下方说明已经讲清楚了。
+ */
 .day__hours::placeholder {
-  color: var(--text-faint);
-  font-family: var(--font-sans);
+  color: transparent;
   text-align: left;
+}
+
+.day:hover .day__hours::placeholder {
+  color: var(--text-faint);
 }
 
 .day__hours:hover {
@@ -462,11 +475,16 @@ const monthTotalPay = computed(() =>
   border-color: var(--accent);
 }
 
+.day__hours:focus::placeholder {
+  color: var(--text-faint);
+}
+
 .day__pay {
-  font-size: 9px;
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
   color: var(--positive);
   text-align: right;
-  line-height: 1;
+  line-height: 1.1;
 }
 
 .calendar__summary {
@@ -486,17 +504,19 @@ const monthTotalPay = computed(() =>
 }
 
 .summary-item__label {
-  font-size: 10px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
   color: var(--text-muted);
 }
 
 .summary-item__value {
-  font-size: 13px;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
   color: var(--text-strong);
 }
 
 .summary-item--workday {
-  border-left: 2px solid rgba(255, 255, 255, 0.3);
+  border-left: 2px solid var(--border-strong);
 }
 .summary-item--rest {
   border-left: 2px solid var(--warning);
@@ -509,15 +529,17 @@ const monthTotalPay = computed(() =>
 }
 
 .summary-item__value--total {
-  font-size: 16px;
-  font-weight: 650;
+  font-size: 17px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.015em;
   color: var(--positive);
 }
 
 .calendar__note {
   margin: 0;
-  font-size: 11px;
-  line-height: 1.6;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
+  line-height: var(--lh-body);
   color: var(--text-faint);
 }
 

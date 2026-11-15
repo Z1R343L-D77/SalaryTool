@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { computed, watch } from "vue";
 import type { SalaryState } from "../core/defaults";
-import { formatMoney, formatRate, round2 } from "../core/money";
+import { formatMoney, formatPrecise, formatRate, round2 } from "../core/money";
 import {
   HOLIDAY_RATE,
   WEEKDAY_RATE,
   WEEKEND_RATE,
   calcOvertime,
+  hourlyToMonthly,
+  monthlyToHourly,
+  summarizeCalendarHours,
 } from "../core/overtime";
+import type { OvertimeBaseMode } from "../core/overtime";
 import {
   ensureOvertimeIncome,
   findOvertimeIncome,
@@ -21,6 +25,10 @@ import OvertimeCalendar from "./OvertimeCalendar.vue";
  *
  * 输入直接读写 store 里的 state.overtime，切换栏目不会丢失；
  * 打开「同步到收入项」后，算出的合计会自动写进指定的收入项。
+ *
+ * 月薪与时薪是同一枚硬币的两面：改任意一边，另一边立刻按
+ * 「月薪 = 时薪 × 月计薪天数 × 日工时」重算，所以来回切换模式不会
+ * 覆盖你手填的数。工时同理——日历里改了任何一天，三档合计跟着更新。
  */
 const props = defineProps<{ state: SalaryState }>();
 
@@ -33,15 +41,76 @@ const basicSalary = computed(() => {
   return props.state.incomes.find((item) => item.includeInSocialBase)?.amount ?? 0;
 });
 
-// 跟随基本工资：收入项里的基本工资一变，基数同步跟上
+/** 时薪 ← 月薪（用于跟随基本工资、改月计薪天数等场景）。 */
+function syncHourlyFromBase(): void {
+  input.value.hourlyRate = monthlyToHourly(
+    input.value.base,
+    input.value.monthlyDays,
+    input.value.dailyHours,
+  );
+}
+
+/** 月薪 ← 时薪。 */
+function syncBaseFromHourly(): void {
+  input.value.base = hourlyToMonthly(
+    input.value.hourlyRate,
+    input.value.monthlyDays,
+    input.value.dailyHours,
+    input.value.base,
+  );
+}
+
+// 跟随基本工资：收入项里的基本工资一变，月薪和时薪同步跟上
 watch(
   basicSalary,
   (value) => {
-    if (input.value.followBasicSalary && input.value.mode === "monthly") {
-      input.value.base = value;
-    }
+    if (!input.value.followBasicSalary) return;
+    input.value.base = value;
+    syncHourlyFromBase();
   },
   { immediate: true },
+);
+
+/*
+ * 老配置里时薪可能还是 0（早期版本只在切到「直接填时薪」时才写这个字段）。
+ * 首次挂载时补一次：只要月薪有值、时薪为空，就按当前折算规则算出来，
+ * 免得一进时薪模式看到 0。
+ */
+if (!input.value.followBasicSalary && input.value.hourlyRate <= 0 && input.value.base > 0) {
+  syncHourlyFromBase();
+}
+
+/** 改月薪：时薪立刻反算。 */
+function onBaseInput(value: number): void {
+  input.value.base = value;
+  syncHourlyFromBase();
+  // 手填基数就不再跟随基本工资，否则下次基本工资变动会把这里覆盖掉
+  input.value.followBasicSalary = false;
+}
+
+/** 改时薪：月薪立刻反算，并停止跟随基本工资。 */
+function onHourlyInput(value: number): void {
+  input.value.hourlyRate = value;
+  syncBaseFromHourly();
+  input.value.followBasicSalary = false;
+}
+
+/*
+ * 月计薪天数 / 日工时属于「折算规则」，改了之后另一边要按新规则重算。
+ * 跟随基本工资时以月薪为准，否则以当前正在填的那一边为准。
+ */
+watch(
+  () => [input.value.monthlyDays, input.value.dailyHours],
+  () => {
+    if (input.value.followBasicSalary) {
+      input.value.base = basicSalary.value;
+      syncHourlyFromBase();
+    } else if (input.value.mode === "hourly") {
+      syncBaseFromHourly();
+    } else {
+      syncHourlyFromBase();
+    }
+  },
 );
 
 /** 可以绑定的收入项（排除加班费本身，避免自我覆盖；加班补助是另一笔钱，可以选）。 */
@@ -56,31 +125,33 @@ const boundIncome = computed(() => findOvertimeIncome());
 
 function toggleAuto(value: boolean): void {
   input.value.followBasicSalary = value;
-  if (value) input.value.base = basicSalary.value;
+  if (value) {
+    input.value.base = basicSalary.value;
+    syncHourlyFromBase();
+  }
 }
 
-/** 记住进入时薪模式前是否跟随基本工资，切回来时才能无损还原。 */
+/*
+ * 切换模式只换「显示哪一个」，不重算数字 ——
+ * 月薪和时薪在编辑时已经互相同步过了，这里再算一遍只会把用户刚填的值盖掉。
+ *
+ * 唯一要照顾的是「跟随基本工资」：这个开关只在月薪模式显示。
+ * 进时薪模式时记下状态；如果用户没动过时薪，切回来就还原跟随（否则会留下
+ * 3883.68 这种折算出来的怪数字）；动过的话就以他填的时薪为准。
+ */
 let followBeforeHourly = true;
+let hourlyTouched = false;
 
-/** 切换月薪 / 时薪模式：把当前小时工资带过去，避免切完数字归零。 */
-function switchMode(mode: "monthly" | "hourly"): void {
+function switchMode(mode: OvertimeBaseMode): void {
   if (input.value.mode === mode) return;
-  const currentHourly = result.value.hourlyBase;
   if (mode === "hourly") {
     followBeforeHourly = input.value.followBasicSalary;
-    input.value.hourlyRate = currentHourly;
+    hourlyTouched = false;
     input.value.followBasicSalary = false;
-  } else {
-    // 月薪 ÷ 21.75 ÷ 8 的四舍五入再乘回去会有零点几元的误差，
-    // 所以原来是跟随基本工资的话直接还原，不用反算。
-    if (followBeforeHourly) {
-      input.value.followBasicSalary = true;
-      input.value.base = basicSalary.value;
-    } else {
-      // 从时薪折算回月薪：时薪 × 21.75 × 8
-      input.value.base = round2(currentHourly * input.value.monthlyDays * input.value.dailyHours);
-      input.value.followBasicSalary = false;
-    }
+  } else if (followBeforeHourly && !hourlyTouched) {
+    input.value.followBasicSalary = true;
+    input.value.base = basicSalary.value;
+    syncHourlyFromBase();
   }
   input.value.mode = mode;
 }
@@ -100,10 +171,87 @@ function onCreateTarget(): void {
   ensureOvertimeIncome();
 }
 
+const calendarHours = computed(() => summarizeCalendarHours(input.value.calendar));
+
+const calendarTotal = computed(
+  () =>
+    calendarHours.value.weekdayHours +
+    calendarHours.value.weekendHours +
+    calendarHours.value.holidayHours,
+);
+
+const manualTotal = computed(
+  () => input.value.weekdayHours + input.value.weekendHours + input.value.holidayHours,
+);
+
+/**
+ * 日历里任何一天的工时或档位一变，三档合计就跟着更新。
+ *
+ * 这样「按日历填写 → 切回直接填合计」看到的就是日历算出来的数，
+ * 不需要每次切换都重新汇总一遍。
+ */
+function syncHoursFromCalendar(): void {
+  input.value.weekdayHours = calendarHours.value.weekdayHours;
+  input.value.weekendHours = calendarHours.value.weekendHours;
+  input.value.holidayHours = calendarHours.value.holidayHours;
+}
+
+/*
+ * 日历一改，三档合计实时跟着变，不用等切回合计模式。
+ *
+ * 只在日历确实有记录时才写：用户可能先在「直接填合计」里填了数、再点开日历
+ * 看看，这时候用 0 去覆盖会把他刚填的内容抹掉。
+ */
+watch(
+  () => input.value.calendar,
+  () => {
+    if (input.value.entryMode !== "calendar") return;
+    if (calendarTotal.value <= 0) return;
+    syncHoursFromCalendar();
+  },
+  { deep: true },
+);
+
+/**
+ * 切换工时录入方式。
+ *
+ * 日历 → 合计：直接用日历汇总覆盖三档合计，这是「同步记录」的方向。
+ * 合计 → 日历：完全不碰日历。日历是按天记的真实工时，拿模糊的合计
+ * 去反推每一天只能靠猜，一旦写进去就把那些记录毁了。
+ *
+ * 两边不一致时由 hoursNote 在界面上说明，由用户自己决定用哪个。
+ */
+function switchEntryMode(mode: "manual" | "calendar"): void {
+  if (input.value.entryMode === mode) return;
+  if (mode === "manual" && calendarTotal.value > 0) {
+    syncHoursFromCalendar();
+  }
+  input.value.entryMode = mode;
+}
+
+/** 日历模式下两者不一致时的说明；反过来永远不覆盖日历数据。 */
+const hoursNote = computed(() => {
+  if (input.value.entryMode !== "calendar") return "";
+  const cal = round2(calendarTotal.value);
+  const manual = round2(manualTotal.value);
+  if (cal === 0 && manual > 0) {
+    return `日历里还没有记录，当前按 0 小时计算；「直接填合计」里的 ${manual} 小时仍然保留，切回去即可继续用。`;
+  }
+  if (cal > 0 && manual > 0 && cal !== manual) {
+    return `日历汇总 ${cal} 小时，与直接填写的 ${manual} 小时不同，当前按日历计算。`;
+  }
+  return "";
+});
+
+/** 清零只作用于当前正在用的录入方式，另一边的数据保留。 */
 function resetHours(): void {
-  input.value.weekdayHours = 0;
-  input.value.weekendHours = 0;
-  input.value.holidayHours = 0;
+  if (input.value.entryMode === "calendar") {
+    input.value.calendar.hours = {};
+  } else {
+    input.value.weekdayHours = 0;
+    input.value.weekendHours = 0;
+    input.value.holidayHours = 0;
+  }
 }
 
 const result = computed(() => calcOvertime(input.value));
@@ -117,10 +265,11 @@ const TIERS = [
 /** 月薪模式的折算说明：月薪 ÷ 21.75 ÷ 8 */
 const formula = computed(
   () =>
-    `${formatMoney(input.value.base)} ÷ ${input.value.monthlyDays} ÷ ${input.value.dailyHours} = ${formatMoney(result.value.hourlyBase)} 元/小时`,
+    `${formatMoney(input.value.base)} ÷ ${input.value.monthlyDays} ÷ ${input.value.dailyHours} = ${formatPrecise(result.value.hourlyBase)} 元/小时`,
 );
 
 const isHourly = computed(() => input.value.mode === "hourly");
+const isCalendar = computed(() => input.value.entryMode === "calendar");
 const syncEnabled = computed(() => props.state.overtimeSync.enabled);
 
 /** 折合工作日：按每日标准工时换算，帮助理解工时规模 */
@@ -164,9 +313,10 @@ const equivalentDays = computed(() =>
         <label v-if="!isHourly" class="field">
           <span class="field__label">加班费基数（元/月）</span>
           <NumberField
-            v-model="input.base"
+            :model-value="input.base"
             :disabled="input.followBasicSalary"
             class="base-row__field"
+            @update:model-value="onBaseInput"
           />
           <span class="field__hint">
             折算小时工资 = {{ formula }}
@@ -175,7 +325,13 @@ const equivalentDays = computed(() =>
 
         <label v-else class="field">
           <span class="field__label">加班费基数（元/小时）</span>
-          <NumberField v-model="input.hourlyRate" class="base-row__field" suffix="元/时" />
+          <NumberField
+            :model-value="input.hourlyRate"
+            class="base-row__field"
+            suffix="元/时"
+            :precision="4"
+            @update:model-value="onHourlyInput"
+          />
           <span class="field__hint">
             时薪直乘倍率，不再按 21.75 天折算
           </span>
@@ -196,20 +352,22 @@ const equivalentDays = computed(() =>
         <div class="segmented" role="radiogroup" aria-label="工时录入方式">
           <button
             type="button"
-            :class="{ active: input.entryMode === 'manual' }"
-            @click="input.entryMode = 'manual'"
+            :class="{ active: !isCalendar }"
+            @click="switchEntryMode('manual')"
           >
             直接填合计
           </button>
           <button
             type="button"
-            :class="{ active: input.entryMode === 'calendar' }"
-            @click="input.entryMode = 'calendar'"
+            :class="{ active: isCalendar }"
+            @click="switchEntryMode('calendar')"
           >
             按日历填写
           </button>
         </div>
       </div>
+
+      <p v-if="hoursNote" class="hours-note">{{ hoursNote }}</p>
 
       <OvertimeCalendar
         v-if="input.entryMode === 'calendar'"
@@ -233,7 +391,7 @@ const equivalentDays = computed(() =>
           />
           <div class="tier__calc">
             <span class="tier__unit">
-              {{ formatMoney(result[`${tier.key}Rate`]) }} 元/小时
+              {{ formatPrecise(result[`${tier.key}Rate`]) }} 元/小时
             </span>
             <strong class="tier__pay num">{{ formatMoney(result[`${tier.key}Pay`]) }} 元</strong>
           </div>
@@ -327,40 +485,24 @@ const equivalentDays = computed(() =>
 }
 
 .mode-row__label {
-  font-size: 12px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--text-muted);
 }
 
-.segmented {
-  display: inline-flex;
-  padding: 2px;
-  gap: 2px;
+/* 两种录入方式数据不一致时的提示：说明当前以哪一边为准 */
+.hours-note {
+  margin: -2px 0 12px;
+  padding: 8px 10px;
   border-radius: var(--radius-sm);
-  background: var(--glass-1);
-  border: 1px solid var(--border);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
+  line-height: var(--lh-body);
 }
 
-.segmented button {
-  height: 24px;
-  padding: 0 11px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 500;
-  transition: var(--transition);
-}
-
-.segmented button:hover {
-  color: var(--text-strong);
-}
-
-.segmented button.active {
-  background: var(--glass-3);
-  color: var(--text-strong);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.1) inset;
-}
+/* 分段控件由 global.css 统一提供 */
 
 .base-row {
   display: flex;
@@ -386,32 +528,27 @@ const equivalentDays = computed(() =>
 }
 
 .field__label {
-  font-size: 12px;
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-label);
   color: var(--text);
-  font-weight: 550;
 }
 
 .field__hint {
-  font-size: 11px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
   color: var(--text-muted);
 }
 
 .check {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding-top: 22px;
-  font-size: 12px;
+  gap: 7px;
+  padding-top: 24px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--text-muted);
   white-space: nowrap;
-  cursor: pointer;
-}
-
-.check input {
-  width: 14px;
-  height: 14px;
-  accent-color: var(--accent);
-  margin: 0;
   cursor: pointer;
 }
 
@@ -440,8 +577,9 @@ const equivalentDays = computed(() =>
 }
 
 .tier__name {
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-body);
   color: var(--text-strong);
 }
 
@@ -453,8 +591,9 @@ const equivalentDays = computed(() =>
   border-radius: 6px;
   background: var(--accent-soft);
   color: var(--accent-strong);
-  font-size: 11px;
-  font-weight: 650;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0;
 }
 
 .tier__hours {
@@ -469,17 +608,20 @@ const equivalentDays = computed(() =>
 }
 
 .tier__unit {
-  font-size: 11px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
   color: var(--text-muted);
 }
 
 .tier__pay {
-  font-size: 14px;
+  font-size: var(--fs-subhead);
+  font-weight: var(--fw-semibold);
   color: var(--text-strong);
 }
 
 .tier__hint {
-  font-size: 11px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
   color: var(--text-muted);
 }
 
@@ -503,20 +645,24 @@ const equivalentDays = computed(() =>
 }
 
 .total__label {
-  font-size: 12px;
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-label);
   color: var(--text-muted);
 }
 
 .total__meta {
-  font-size: 11px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
   color: var(--text-muted);
 }
 
 .total__amount {
   font-size: 24px;
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
   color: var(--positive);
-  letter-spacing: -0.01em;
 }
 
 /* —— 同步到收入项 —— */
@@ -544,13 +690,16 @@ const equivalentDays = computed(() =>
 }
 
 .check--strong {
+  padding-top: 0;
   color: var(--text-strong);
-  font-size: 13px;
-  font-weight: 500;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-body);
 }
 
 .sync__status {
-  font-size: 12px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--accent-strong);
 }
 
@@ -559,7 +708,7 @@ const equivalentDays = computed(() =>
 }
 
 .sync__status strong {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .sync__row {
@@ -571,7 +720,8 @@ const equivalentDays = computed(() =>
 }
 
 .sync__label {
-  font-size: 12px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--text-muted);
 }
 
@@ -581,8 +731,9 @@ const equivalentDays = computed(() =>
 
 .sync__hint {
   margin: 10px 0 0;
-  font-size: 11px;
-  line-height: 1.6;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
+  line-height: var(--lh-body);
   color: var(--text-muted);
 }
 
@@ -593,7 +744,8 @@ const equivalentDays = computed(() =>
 }
 
 .details summary {
-  font-size: 12px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--text-muted);
   cursor: pointer;
   user-select: none;
@@ -614,8 +766,9 @@ const equivalentDays = computed(() =>
   margin: 14px 0 0;
   padding-top: 12px;
   border-top: 1px solid var(--divider);
-  font-size: 11px;
-  line-height: 1.6;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--ls-caption);
+  line-height: var(--lh-body);
   color: var(--text-muted);
 }
 </style>

@@ -111,7 +111,7 @@ function submit(): void {
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(9, 12, 18, 0.5);
+  background: var(--backdrop-dim);
   backdrop-filter: blur(2px);
 }
 
@@ -124,8 +124,10 @@ function submit(): void {
   padding: 20px;
   border-radius: var(--radius-card);
   background: var(--surface);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(40px) saturate(160%);
+  -webkit-backdrop-filter: blur(40px) saturate(160%);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--specular-top), var(--shadow-popover);
 }
 
 .modal__head {
@@ -137,14 +139,17 @@ function submit(): void {
 
 .modal__title {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--fs-heading);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-heading);
   color: var(--text-strong);
 }
 
 .modal__text {
   margin: 0;
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
+  line-height: var(--lh-body);
   color: var(--text-muted);
 }
 
@@ -152,7 +157,8 @@ function submit(): void {
   padding: 1px 4px;
   border-radius: 4px;
   background: var(--glass-1);
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
 }
 
 .file {
@@ -160,7 +166,8 @@ function submit(): void {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 12px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--text-muted);
 }
 
@@ -186,19 +193,20 @@ function submit(): void {
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
-  background: var(--glass-2);
+  background: var(--tint-inset-strong);
   color: var(--text-strong);
-  font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
-  font-size: 12px;
-  line-height: 1.6;
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  line-height: 1.65;
+  letter-spacing: 0;
   resize: vertical;
   outline: 0;
+  transition: var(--transition);
 }
 
 .editor:focus {
   border-color: var(--accent);
-  background: var(--surface);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3);
 }
 
 .error {
@@ -207,7 +215,8 @@ function submit(): void {
   border-radius: var(--radius-sm);
   background: var(--negative-soft);
   color: var(--negative);
-  font-size: 12px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
 }
 
 .modal__actions {
