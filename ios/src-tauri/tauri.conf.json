@@ -39,7 +39,8 @@
     "shortDescription": "计算当月工资到手金额",
     "longDescription": "按基本工资、各类补贴、五险一金与累计预扣预缴个税计算当月实发工资。",
     "iOS": {
-      "minimumSystemVersion": "16.0"
+      "minimumSystemVersion": "16.0",
+      "infoPlist": "Info.plist"
     }
   }
 }
