@@ -105,11 +105,18 @@ struct ToggleChip: View {
     }
 }
 
+/// 按下时轻微缩小。
+/// HIG：减弱动态效果时不做缩放，只保留颜色反馈。
 struct ChipButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.95 : 1)
-            .animation(.snappy(duration: 0.14), value: configuration.isPressed)
+            .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.95 : 1))
+            .animation(
+                reduceMotion ? nil : .snappy(duration: 0.14),
+                value: configuration.isPressed
+            )
     }
 }
 
