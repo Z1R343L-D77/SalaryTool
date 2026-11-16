@@ -1,0 +1,75 @@
+# XcodeGen 工程定义。
+#
+# 为什么用 XcodeGen 而不是提交 .xcodeproj：
+# .xcodeproj 里的 pbxproj 是生成物，手改冲突多、diff 不可读。
+# 用一份 YAML 描述工程结构，CI 上现场生成，改文件结构只改这个 YAML。
+#
+#   brew install xcodegen
+#   cd ios-native && xcodegen generate
+
+name: SalaryToolNative
+
+options:
+  bundleIdPrefix: com.salarytool
+  deploymentTarget:
+    iOS: "26.0"          # Liquid Glass 的 .glassEffect() 需要 iOS 26
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGNING_ALLOWED: NO
+    CODE_SIGNING_REQUIRED: NO
+    CODE_SIGN_IDENTITY: ""
+    PROVISIONING_PROFILE_SPECIFIER: ""
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    SWIFT_STRICT_CONCURRENCY: complete
+
+targets:
+  SalaryTool:
+    type: application
+    platform: iOS
+    sources:
+      - path: SalaryTool
+        excludes:
+          - "**/.DS_Store"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.salarytool.ios
+        PRODUCT_NAME: SalaryTool
+        INFOPLIST_FILE: SalaryTool/Info.plist
+        MARKETING_VERSION: "0.3.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1"          # 只做 iPhone
+        ENABLE_PREVIEWS: YES
+        SWIFT_EMIT_LOC_STRINGS: YES
+
+  SalaryToolTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: SalaryToolTests
+    dependencies:
+      - target: SalaryTool
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.salarytool.ios.tests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  SalaryTool:
+    build:
+      targets:
+        SalaryTool: all
+        SalaryToolTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - SalaryToolTests
