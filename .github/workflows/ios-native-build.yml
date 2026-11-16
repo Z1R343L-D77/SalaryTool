@@ -1,0 +1,86 @@
+name: Build iOS (Native)
+
+# 原生 SwiftUI 版。macOS 上是唯一能编译 iOS App 的环境。
+# macos-26 runner 默认自带 Xcode 26.6（含 iOS 26 SDK），
+# Liquid Glass 的 .glassEffect() 才能编过。
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*-native"]
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 确认 Xcode 版本
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i iphoneos || true
+
+      - name: 安装 XcodeGen
+        run: brew install xcodegen
+
+      - name: 生成 Xcode 工程
+        working-directory: ios-native
+        run: xcodegen generate
+
+      # 编译（关闭签名）。先做 Release，产物直接拿来打包 ipa。
+      - name: 编译
+        working-directory: ios-native
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project SalaryToolNative.xcodeproj \
+            -scheme SalaryTool \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            build
+
+      - name: 运行单元测试（模拟器）
+        working-directory: ios-native
+        run: |
+          set -euo pipefail
+          DEVICE=$(xcrun simctl list devices available \
+            | grep -E "iPhone 1[6-9]" | head -1 \
+            | sed -E 's/.*\((iPhone [^)]*)\) \(([0-9A-F-]+)\).*/\1 \2/' || true)
+          echo "模拟器: $DEVICE"
+          xcodebuild test \
+            -project SalaryToolNative.xcodeproj \
+            -scheme SalaryTool \
+            -destination "platform=iOS Simulator,name=iPhone 17 Pro" \
+            CODE_SIGNING_ALLOWED=NO \
+            | tail -40
+
+      - name: 打包 ipa
+        working-directory: ios-native
+        run: |
+          set -euo pipefail
+          APP=$(find build/Build/Products -name "SalaryTool.app" -type d | head -1)
+          if [ -z "$APP" ]; then
+            echo "::error::没有产出 .app"
+            find build/Build/Products -maxdepth 3 | head -30
+            exit 1
+          fi
+          echo "APP=$APP"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/Info.plist"
+
+          rm -rf Payload out && mkdir -p Payload out
+          cp -R "$APP" Payload/
+          zip -qry out/SalaryTool-native-unsigned.ipa Payload
+          ls -lh out/SalaryTool-native-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SalaryTool-native-ipa
+          path: ios-native/out/SalaryTool-native-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30
