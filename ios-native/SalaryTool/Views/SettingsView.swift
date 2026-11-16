@@ -27,9 +27,7 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        @Bindable var appearance = appearance
-
-        return NavigationStack {
+        NavigationStack {
             Form {
                 appearanceSection
                 dataSection
@@ -74,26 +72,32 @@ struct SettingsView: View {
 
     // MARK: 外观
 
+    /// 独立的计算属性，@Bindable 必须在它自己的作用域里声明
+    /// （body 里那个局部变量传不过来）
     private var appearanceSection: some View {
-        Section {
+        @Bindable var appearance = appearance
+
+        return Section {
             Picker("主题", selection: $appearance.theme) {
-                ForEach(ThemeMode.allCases) { mode in
+                ForEach(ThemeMode.allCases, id: \.self) { mode in
                     Text(mode.label).tag(mode)
                 }
             }
+            .pickerStyle(.menu)
 
             Picker("字号", selection: $appearance.fontScale) {
-                ForEach(FontScale.allCases) { scale in
+                ForEach(FontScale.allCases, id: \.self) { scale in
                     Text(scale.label).tag(scale)
                 }
             }
             .pickerStyle(.segmented)
 
             Picker("壁纸", selection: $appearance.wallpaper) {
-                ForEach(WallpaperChoice.allCases) { choice in
+                ForEach(WallpaperChoice.allCases, id: \.self) { choice in
                     Text(choice.label).tag(choice)
                 }
             }
+            .pickerStyle(.menu)
         } header: {
             Text("外观")
         } footer: {

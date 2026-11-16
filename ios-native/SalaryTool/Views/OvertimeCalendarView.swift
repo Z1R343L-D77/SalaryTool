@@ -32,7 +32,8 @@ struct OvertimeCalendarView: View {
 
     private var summary: CalendarSummary {
         var result = CalendarSummary()
-        for day in weeks.flatMap({ $0 }).compactMap({ $0 }) where day.hours > 0 {
+        let flat: [CalendarDay] = weeks.flatMap { $0 }.compactMap { $0 }
+        for day in flat where day.hours > 0 {
             result.workedDays += 1
             switch day.type {
             case .holiday: result.holidayHours += day.hours
@@ -340,7 +341,8 @@ struct OvertimeCalendarView: View {
 
     private func fill(_ type: DayType) {
         var cal = calendar
-        for day in weeks.flatMap({ $0 }).compactMap({ $0 }) where day.type == type {
+        let flat: [CalendarDay] = weeks.flatMap { $0 }.compactMap { $0 }
+        for day in flat where day.type == type {
             cal.hours[day.key] = Money.round2(min(24, max(0, quickHours)))
         }
         store.state.overtime.calendar = cal
