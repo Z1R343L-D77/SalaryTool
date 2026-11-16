@@ -212,7 +212,8 @@ enum OvertimeMath {
                 overrides: calendar.overrides
             )
             var summary = CalendarSummary()
-            for day in weeks.flatMap({ $0 }).compactMap({ $0 }) where day.hours > 0 {
+            let flat: [CalendarDay] = weeks.flatMap { $0 }.compactMap { $0 }
+            for day in flat where day.hours > 0 {
                 summary.workedDays += 1
                 switch day.type {
                 case .holiday: summary.holidayHours += day.hours

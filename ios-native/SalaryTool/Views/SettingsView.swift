@@ -27,7 +27,9 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        @Bindable var appearance = appearance
+
+        return NavigationStack {
             Form {
                 appearanceSection
                 dataSection

@@ -574,3 +574,23 @@ struct DeductionSectionView: View {
         }
     }
 }
+
+// MARK: - 月份选择器
+
+/// 单独抽出来：ForEach 里嵌套 Picker + Binding 太深时，
+/// Swift 的类型检查器会超时。
+private struct MonthPicker: View {
+    @Binding var month: Double
+
+    private static let months = Array(1...12)
+
+    var body: some View {
+        Picker("月份", selection: $month) {
+            ForEach(Self.months, id: \.self) { value in
+                Text("\(value) 月").tag(Double(value))
+            }
+        }
+        .pickerStyle(.menu)
+        .tint(.primary)
+    }
+}

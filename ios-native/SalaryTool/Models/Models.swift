@@ -239,7 +239,7 @@ struct OvertimeCalendar: Codable, Hashable {
     var year: Double
     var month: Double
     var hours: [String: Double]
-    var overrides: [String: String]
+    var overrides: [String: DayType]
 
     static func empty() -> OvertimeCalendar {
         let now = Date()
