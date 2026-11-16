@@ -1,27 +1,24 @@
 //
 //  RootView.swift
-//  完全照 iOS 天气 App 的结构：
+//  结构照 iOS 天气 App：
 //
 //    ┌──────────────────────────────┐
-//    │ 工资单                    ⚙   │  ← 这些都在滚动内容里，
-//    │ 上海 · 第 11 月               │     往下滑会一起滑走
-//    │        ¥9,692.33             │
-//    │        本月实发到手            │
+//    │ 工资单                    ⚙   │  ┐
+//    │ 上海 · 第 11 月               │  │ 全部在 ScrollView 里，
+//    │        ¥9,692.33             │  │ 上下滚动时一起走
+//    │        本月实发到手            │  ┘
 //    │                              │
-//    │   [卡片]                      │
-//    │   [卡片]                      │
+//    │   [卡片]  ← 只有这块左右翻页    │
 //    │                              │
-//    │  ◯        • • • • • •      ◯ │  ← 浮动玻璃工具栏，始终可见
+//    │  ◯        • • • • • •      ◯ │  ← 底部工具栏，永远不动
 //    └──────────────────────────────┘
 //
-//  几个关键点：
-//  1. TabView 铺满整屏（忽略安全区），卡片滚到状态栏底下也不会被裁出硬边。
-//  2. 标题和金额**不在 TabView 里**，所以左右翻页时它们不动；
-//     但它们按当前页的滚动偏移整体上移，所以**上下滚动时会跟着走**
-//     —— 这正是天气 App 的行为。
-//  3. 每页的 ScrollView 顶部留出「安全区 + 头部高度」的空白，
-//     内容滚动时才不会一上来就压在标题下面。
-//  4. 底部三个控件都是透明 Liquid Glass：左右 52pt 圆形 + 中间胶囊。
+//  两个方向的手势严格分开：
+//  - 上下滚：标题、金额、卡片一起滚（都在同一个 ScrollView 里）
+//  - 左右翻：只有卡片区在翻，标题和金额纹丝不动（它们在 TabView 之外）
+//
+//  卡片区用 TabView + 实测高度：TabView 嵌在 ScrollView 里必须有确定高度，
+//  所以每页用 GeometryReader 量出自身高度，取当前页的那个当 frame。
 //
 
 import SwiftUI
@@ -38,32 +35,25 @@ struct RootView: View {
     @State private var showDetail = false
     @State private var showSectionList = false
 
-    /// 底部工具栏本体高度（52）加上下留白，用于计算滚动内容的底部余量
+    /// 每页卡片的实测高度。TabView 嵌在 ScrollView 里必须有确定高度。
+    @State private var pageHeights: [Section: CGFloat] = [:]
+
     private let dockHeight: CGFloat = 52
 
-    /// 当前页的垂直滚动偏移。头部按它上移，所以「上下滚时金额跟着走，
-    /// 左右翻页时不动」—— 这是天气 App 的行为。
-    @State private var scrollOffset: CGFloat = 0
-    /// 头部（标题 + 金额）的实际高度，用来算首屏内容的起始位置
-    @State private var headerHeight: CGFloat = 0
-
-    /// 压在壁纸上的文字该用白色还是深色。
-    /// 无壁纸 + 浅色主题时壁纸是白底，白字会看不见 —— 见 AppearanceStore 里的说明。
+    /// 压在壁纸上的文字该用白色还是深色（见 AppearanceStore）
     private var onWallpaper: Color {
         appearance.prefersWhiteText(system: systemScheme) ? .white : .black
-    }
-
-    /// 玻璃材质的厚度。
-    /// 浅色主题下 `.regular` 是一块发白的不透明板，压在白底上很重；
-    /// `.clear` 更通透，配合深色文字反而清楚。
-    private var glassVariant: Glass {
-        systemScheme == .dark ? .regular : .clear
     }
 
     private var onWallpaperSecondary: Color {
         appearance.prefersWhiteText(system: systemScheme)
             ? Color.white.opacity(0.75)
             : Color.black.opacity(0.55)
+    }
+
+    /// 玻璃材质厚度：浅色主题下 .regular 太实，用 .clear
+    private var glassVariant: Glass {
+        systemScheme == .dark ? .regular : .clear
     }
 
     enum Section: String, CaseIterable, Identifiable, Hashable {
@@ -118,56 +108,28 @@ struct RootView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let safeTop = proxy.safeAreaInsets.top
             let safeBottom = proxy.safeAreaInsets.bottom
-            let topPad = safeTop + 4
 
-            ZStack(alignment: .top) {
+            ZStack(alignment: .bottom) {
                 WallpaperView()
                     .ignoresSafeArea()
 
-                // 只有卡片区参与上下滚 / 左右翻页
-                TabView(selection: $section) {
-                    ForEach(Section.allCases) { item in
-                        page(
-                            item,
-                            topInset: topPad + headerHeight,
-                            safeBottom: safeBottom
-                        )
-                        .tag(item)
+                ScrollView {
+                    VStack(spacing: 0) {
+                        headerRow
+                        hero
+                        cardsPager
                     }
+                    .padding(.horizontal, 16)
+                    // 底部留出工具栏 + 安全区，滚到底时最后一张卡完整露出
+                    .padding(.bottom, dockHeight + safeBottom + 40)
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .ignoresSafeArea()
-
-                // 标题与金额：不在 TabView 里，所以左右翻页时不动；
-                // 但会按当前页的滚动偏移整体上移，所以上下滚时会跟着走。
-                VStack(spacing: 0) {
-                    headerText
-                    hero
-                }
-                .padding(.top, topPad)
-                .offset(y: -scrollOffset)
-                // 文字层不接收触摸，否则会挡住下面 ScrollView 的拖拽
-                .allowsHitTesting(false)
-                .onGeometryChange(for: CGFloat.self) { view in
-                    view.size.height - topPad
-                } action: { value in
-                    headerHeight = value
-                }
+                .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.interactively)
 
                 bottomBar
-                    .frame(maxHeight: .infinity, alignment: .bottom)
                     .padding(.horizontal, 16)
                     .padding(.bottom, max(safeBottom, 8) + 2)
-            }
-            .ignoresSafeArea()
-            // 齿轮单独一层：文字层已关闭触摸，按钮得自己挂着才点得到
-            .overlay(alignment: .topTrailing) {
-                gearButton
-                    .padding(.trailing, 20)
-                    .padding(.top, topPad)
-                    .offset(y: -scrollOffset)
             }
         }
         .sheet(isPresented: $showSettings) {
@@ -192,123 +154,120 @@ struct RootView: View {
             }
             jump.target = nil
         }
-        .onChange(of: section) { _, _ in
-            // 换页时新页从顶部开始，头部要跟着复位
-            scrollOffset = 0
-        }
     }
 
-    // MARK: 单页内容
+    // MARK: 标题行（标题 + 齿轮，左右对齐）
 
-    /// 每个栏目一页，只承载卡片。
-    ///
-    /// 顶部留出 `topInset`（安全区 + 头部高度）作为空白，
-    /// 刚打开时内容正好从头部下方开始；往上滚时内容滑到头部底下，
-    /// 而头部自己也同步上移，看起来就是「一起滚走的」。
-    private func page(_ item: Section, topInset: CGFloat, safeBottom: CGFloat) -> some View {
-        ScrollView {
-            VStack(spacing: 12) {
-                Color.clear.frame(height: max(0, topInset))
-
-                switch item {
-                case .income: IncomeSectionView()
-                case .special: SpecialSectionView()
-                case .social: SocialSectionView()
-                case .ytd: YtdSectionView()
-                case .deduction: DeductionSectionView()
-                case .overtime: OvertimeSectionView()
-                }
+    private var headerRow: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("工资单")
+                    .font(.system(size: 34, weight: .bold))
+                    .tracking(-0.6)
+                    .foregroundStyle(onWallpaper)
+                Text(verbatim: "\(CityRepository.policy(for: store.state.cityId).name) · 第 \(Int(store.state.ytd.monthIndex)) 月")
+                    .font(.subheadline)
+                    .foregroundStyle(onWallpaperSecondary)
             }
-            .padding(.horizontal, 16)
-            // 底部留出工具栏 + 安全区，滚到底时最后一张卡完整露出
-            .padding(.bottom, dockHeight + safeBottom + 40)
-        }
-        .scrollIndicators(.hidden)
-        .scrollDismissesKeyboard(.interactively)
-        // 把当前页的垂直偏移报给外面的头部用
-        .onScrollGeometryChange(for: CGFloat.self) { geometry in
-            geometry.contentOffset.y + geometry.contentInsets.top
-        } action: { _, value in
-            scrollOffset = max(0, value)
-        }
-    }
 
-    // MARK: 顶部
+            Spacer(minLength: 12)
 
-    /// 标题文字。齿轮按钮不在这里 —— 文字层要关闭触摸，
-    /// 否则会挡住下面 ScrollView 的拖拽；按钮单独叠一层。
-    private var headerText: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("工资单")
-                .font(.system(size: 34, weight: .bold))
-                .tracking(-0.6)
-                .foregroundStyle(onWallpaper)
-            Text(verbatim: "\(CityRepository.policy(for: store.state.cityId).name) · 第 \(Int(store.state.ytd.monthIndex)) 月")
-                .font(.subheadline)
-                .foregroundStyle(onWallpaperSecondary)
+            Button {
+                showSettings = true
+            } label: {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(onWallpaper)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .glassEffect(glassVariant.interactive(), in: .circle)
+            .accessibilityLabel("设置")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 20)
+        .padding(.top, 8)
         .padding(.bottom, 4)
-    }
-
-    private var gearButton: some View {
-        Button {
-            showSettings = true
-        } label: {
-            Image(systemName: "gearshape.fill")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(onWallpaper)
-                .frame(width: 44, height: 44)
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .glassEffect(glassVariant.interactive(), in: .circle)
-        .accessibilityLabel("设置")
     }
 
     // MARK: 金额
 
     private var hero: some View {
-        VStack(spacing: 0) {
-            Text("¥\(Money.format(store.result.netPay))")
-                .font(.system(size: 58, weight: .thin, design: .rounded))
-                .monospacedDigit()
-                .minimumScaleFactor(0.6)
-                .lineLimit(1)
-                .contentTransition(reduceMotion ? .opacity : .numericText())
-                .animation(
-                    reduceMotion ? .easeInOut(duration: 0.2) : .snappy,
-                    value: store.result.netPay
-                )
-            Text("本月实发到手")
-                .font(.subheadline)
-                .foregroundStyle(onWallpaperSecondary)
+        Button {
+            showDetail = true
+        } label: {
+            VStack(spacing: 0) {
+                Text("¥\(Money.format(store.result.netPay))")
+                    .font(.system(size: 58, weight: .thin, design: .rounded))
+                    .monospacedDigit()
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+                    .contentTransition(reduceMotion ? .opacity : .numericText())
+                    .animation(
+                        reduceMotion ? .easeInOut(duration: 0.2) : .snappy,
+                        value: store.result.netPay
+                    )
+                Text("本月实发到手")
+                    .font(.subheadline)
+                    .foregroundStyle(onWallpaperSecondary)
+            }
+            .foregroundStyle(onWallpaper)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
         }
-        .foregroundStyle(onWallpaper)
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 20)
-        .padding(.vertical, 6)
-        .padding(.bottom, 6)
+        .buttonStyle(.plain)
+        .padding(.bottom, 14)
+    }
+
+    // MARK: 卡片区（只有这块左右翻页）
+
+    private var cardsPager: some View {
+        TabView(selection: $section) {
+            ForEach(Section.allCases) { item in
+                cardContent(item)
+                    .background {
+                        // 量出每页高度，TabView 才有确定的 frame
+                        GeometryReader { geo in
+                            Color.clear
+                                .onAppear { pageHeights[item] = geo.size.height }
+                                .onChange(of: geo.size.height) { _, value in
+                                    pageHeights[item] = value
+                                }
+                        }
+                    }
+                    .tag(item)
+            }
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .frame(height: pageHeights[section] ?? 620)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: pageHeights[section])
+    }
+
+    @ViewBuilder
+    private func cardContent(_ item: Section) -> some View {
+        VStack(spacing: 12) {
+            switch item {
+            case .income: IncomeSectionView()
+            case .special: SpecialSectionView()
+            case .social: SocialSectionView()
+            case .ytd: YtdSectionView()
+            case .deduction: DeductionSectionView()
+            case .overtime: OvertimeSectionView()
+            }
+        }
+        .padding(.bottom, 4)
     }
 
     // MARK: 底部浮动工具栏
-    //
-    // 三个控件全是透明玻璃：
-    //   左 / 右 —— 52pt 圆形
-    //   中间   —— 52pt 高胶囊，里面是圆点
-    // 间距 18pt，比之前松一些，和天气 App 那一排的呼吸感一致。
 
     private var bottomBar: some View {
         HStack(spacing: 0) {
-            // 左侧圆形贴边
             glassCircleButton(systemName: "list.bullet.rectangle", label: "明细") {
                 showDetail = true
             }
 
             Spacer(minLength: 16)
 
-            // 中间胶囊居中
             pageDots
                 .padding(.horizontal, 12)
                 .frame(height: 52)
@@ -316,7 +275,6 @@ struct RootView: View {
 
             Spacer(minLength: 16)
 
-            // 右侧圆形贴边
             glassCircleButton(systemName: "square.grid.2x2", label: "栏目列表") {
                 showSectionList = true
             }
@@ -325,9 +283,8 @@ struct RootView: View {
 
     /// 圆形玻璃按钮。
     ///
-    /// 注意 `.glassEffect` 挂在 Button **外层**：挂在 label 上时，
-    /// 玻璃层会自己接管命中测试，按钮收不到点击（左右两个"失效"就是这个原因）。
-    /// 同时用 `.contentShape(Circle())` 明确命中区域。
+    /// `.glassEffect` 必须挂在 Button **外层**：挂在 label 上时玻璃层会
+    /// 接管命中测试，按钮收不到点击。同时用 contentShape 明确命中区域。
     private func glassCircleButton(
         systemName: String,
         label: String,
