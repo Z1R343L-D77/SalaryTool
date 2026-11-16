@@ -22,12 +22,17 @@ struct GlassCard<Content: View>: View {
     var cornerRadius: CGFloat = 22
     @ViewBuilder var content: Content
 
+    @Environment(\.colorScheme) private var scheme
+
     var body: some View {
         content
             .padding(18)
             .background {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(.ultraThinMaterial)
+                    // 深色下用很薄的材质（能看见云在动）；
+                    // 浅色下背景本身就是白的，ultraThin 会和底色糊成一片，
+                    // 换 regular 才有足够的层次。
+                    .fill(scheme == .dark ? .ultraThinMaterial : .regularMaterial)
             }
     }
 }

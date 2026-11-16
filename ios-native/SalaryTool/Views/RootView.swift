@@ -198,7 +198,7 @@ struct RootView: View {
                     .font(.system(size: 34, weight: .bold))
                     .tracking(-0.6)
                     .foregroundStyle(onWallpaper)
-                Text("\(CityRepository.policy(for: store.state.cityId).name) · 第 \(Int(store.state.ytd.monthIndex)) 月")
+                Text(verbatim: "\(CityRepository.policy(for: store.state.cityId).name) · 第 \(Int(store.state.ytd.monthIndex)) 月")
                     .font(.subheadline)
                     .foregroundStyle(onWallpaperSecondary)
             }

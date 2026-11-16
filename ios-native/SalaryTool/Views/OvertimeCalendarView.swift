@@ -69,7 +69,9 @@ struct OvertimeCalendarView: View {
             }
             .buttonStyle(.plain)
 
-            Text("\(year) 年 \(month) 月")
+            // 用 verbatim：Text("\(year)") 走 LocalizedStringKey，
+            // Int 会被加上千分位，显示成「2,026 年」
+            Text(verbatim: "\(year) 年 \(month) 月")
                 .font(.subheadline.weight(.medium))
                 .monospacedDigit()
                 .frame(maxWidth: .infinity)
