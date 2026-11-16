@@ -2,20 +2,20 @@
 //  RootView.swift
 //
 //    ┌──────────────────────────────┐
-//    │ 工资单                    ⚙   │  ← 固定，毛玻璃背景
+//    │ 工资单                    ⚙   │  固定，Liquid Glass 通栏
 //    ├──────────────────────────────┤
-//    │        ¥9,692.33             │  ┐
-//    │        本月实发到手            │  │ 跟着卡片一起滚
-//    │   [卡片]                      │  │
-//    │   [卡片]  ← 只有这块左右翻页    │  ┘
-//    │                              │
-//    │  ◯        • • • • • •      ◯ │  ← 固定，贴底
+//    │        ¥9,692.33             │  跟卡片一起上下滚
+//    │   [卡片]  ← 只有这块左右翻页    │
+//    │  ◯        • • • • • •      ◯ │  固定，贴底
 //    └──────────────────────────────┘
 //
-//  三个方向的行为严格分开：
-//  - 上下滚：标题不动（毛玻璃浮起），金额和卡片一起滚
-//  - 左右翻：只有卡片区在翻，金额不动（它在 TabView 之外）
-//  - 横滑不跳：每页自带 ScrollView，页面高度天然等于屏幕
+//  这一版重点修两件事：
+//  1. 玻璃背景是**独立一层**，铺满整条顶栏并延伸到状态栏后面。
+//     之前把它挂在 headerBar 的 .background 上，再叠 ignoresSafeArea，
+//     量出来的高度会把安全区算两遍，玻璃只覆盖到一半屏幕。
+//     —— 你看到的「上面那块灰色横条到此为止」就是这个。
+//  2. TabView 必须显式钉死尺寸。ZStack 里不给尺寸它会缩到内容高度，
+//     .page 再把内容垂直居中 → 卡片落到屏幕中间。
 //
 
 import SwiftUI
@@ -32,14 +32,15 @@ struct RootView: View {
     @State private var showDetail = false
     @State private var showSectionList = false
 
-    /// 当前页的滚动偏移，金额层按它上移
+    /// 当前页的滚动偏移（金额层按它上移）
     @State private var scrollOffset: CGFloat = 0
-    /// 固定标题栏的实测高度，用来给金额层定位
-    @State private var headerHeight: CGFloat = 0
+    /// 顶栏内容（含安全区）的实测高度。只量内容，不含量背景。
+    @State private var headerHeight: CGFloat = 120
 
     private let dockHeight: CGFloat = 52
 
-    /// 压在壁纸上的文字该用白色还是深色（见 AppearanceStore）
+    // MARK: 颜色与材质
+
     private var onWallpaper: Color {
         appearance.prefersWhiteText(system: systemScheme) ? .white : .black
     }
@@ -50,21 +51,15 @@ struct RootView: View {
             : Color.black.opacity(0.55)
     }
 
+    /// 玻璃上的额外着色：深色壁纸 + 深色玻璃会糊成一片，叠一层黑把边界立住
+    private var glassTint: Color {
+        systemScheme == .dark ? .black.opacity(0.14) : .black.opacity(0.03)
+    }
+
     enum Section: String, CaseIterable, Identifiable, Hashable {
         case income, special, social, ytd, deduction, overtime
 
         var id: String { rawValue }
-
-        var label: String {
-            switch self {
-            case .income: "收入"
-            case .special: "专项"
-            case .social: "社保"
-            case .ytd: "累计"
-            case .deduction: "扣除"
-            case .overtime: "加班"
-            }
-        }
 
         var title: String {
             switch self {
@@ -100,46 +95,53 @@ struct RootView: View {
         }
     }
 
+    // MARK: 主体
+
     var body: some View {
         GeometryReader { proxy in
             let safeTop = proxy.safeAreaInsets.top
             let safeBottom = proxy.safeAreaInsets.bottom
+            let topPad = safeTop + 6
 
             ZStack(alignment: .top) {
                 WallpaperView()
 
-                // 每页自带 ScrollView：内容多长就多长，短页不会留空白，
-                // 也不存在「切页时 frame 变高变矮」的问题。
+                // ① 内容：每页自带 ScrollView，撑满整屏
                 TabView(selection: $section) {
                     ForEach(Section.allCases) { item in
-                        sectionPage(item, topPad: safeTop + 4, safeBottom: safeBottom)
-                            // ★ 必须撑满：.page 样式的 TabView 会把「没有撑满
-                            //   页容器」的内容垂直居中。ScrollView 在页里如果不
-                            //   强制占满，TabView 就按内容高度居中它 ——
-                            //   卡片被推到屏幕中间就是这个原因。
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                            .tag(item)
+                        sectionPage(
+                            item,
+                            topPad: topPad,
+                            safeBottom: safeBottom,
+                            width: proxy.size.width,
+                            height: proxy.size.height
+                        )
+                        .tag(item)
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                // ★ 显式给定宽高。ZStack 里不给尺寸时 TabView 会按内容
-                //   撑成「刚好这么高」，.page 再把内容在这一块里垂直居中
-                //   → 卡片落到屏幕中间。这里用 GeometryReader 量到的实际
-                //   尺寸钉死，每页才有和屏幕完全一样的高度。
+                // 必须钉死，否则 .page 会垂直居中内容
                 .frame(width: proxy.size.width, height: proxy.size.height)
-                .ignoresSafeArea()
 
-                // 金额：在 TabView 之外，所以左右翻页不动；
-                // 按当前页的滚动偏移上移，所以上下滚时跟着走。
+                // ② 金额：在 TabView 之外 → 左右翻页不动；
+                //    按滚动偏移上移 → 上下滚时跟着走
                 hero
                     .padding(.top, headerHeight + 2)
                     .offset(y: -scrollOffset)
                     .opacity(heroOpacity)
                     .allowsHitTesting(false)
 
-                // 固定标题：Liquid Glass 背景，滚动内容从它下面穿过。
-                // 高度只由它自己上报，不参与任何「再算一遍」的组合。
-                headerBar(topPad: safeTop + 4)
+                // ③ 玻璃背景：独立一层，通栏、覆盖状态栏
+                Rectangle()
+                    .fill(.clear)
+                    .glassEffect(.regular, in: .rect(cornerRadius: 0))
+                    .overlay { Rectangle().fill(glassTint) }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: headerHeight)
+                    .allowsHitTesting(false)
+
+                // ④ 顶栏内容（标题 + 齿轮）
+                headerContent(topPad: topPad)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { value in
                         headerHeight = value
                     }
@@ -177,22 +179,19 @@ struct RootView: View {
 
     // MARK: 单页
 
-    /// 每个栏目一页，自带 ScrollView。
-    ///
-    /// 顶部的占位不是「用测量出来的高度画一块空白」，而是**放一份隐藏的
-    /// 真实视图**（`.hidden()` 不渲染但仍然占位）。这样占位高度永远和
-    /// 浮动层严丝合缝，不会因为测量时机、修饰器顺序、字号变化而错位。
-    ///
-    /// 上一版用 `Color.clear.frame(height: headerHeight + heroHeight)`，
-    /// 结果两个测量值把彼此的高度也算进去了，占位翻了倍，卡片被推到屏幕中间。
-    private func sectionPage(_ item: Section, topPad: CGFloat, safeBottom: CGFloat) -> some View {
+    /// 每页一个 ScrollView。顶部放**隐藏的真实视图**当占位，
+    /// 高度天然和浮动层一致，不需要任何测量相加。
+    private func sectionPage(
+        _ item: Section,
+        topPad: CGFloat,
+        safeBottom: CGFloat,
+        width: CGFloat,
+        height: CGFloat
+    ) -> some View {
         ScrollView {
             VStack(spacing: 0) {
-                // 与浮动层同尺寸的透明副本，只用来撑开空间
-                headerBar(topPad: topPad)
-                    .hidden()
-                hero
-                    .hidden()
+                headerContent(topPad: topPad).hidden()
+                hero.hidden()
 
                 cardContent(item)
                     .padding(.top, 6)
@@ -202,38 +201,41 @@ struct RootView: View {
         }
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
+        // 内容从屏幕最顶端开始（被玻璃顶栏盖住），别再叠一次安全区
+        .contentMargins(.top, 0, for: .scrollContent)
         .onScrollGeometryChange(for: CGFloat.self) { geometry in
-            geometry.contentOffset.y + geometry.contentInsets.top
+            max(0, geometry.contentOffset.y + geometry.contentInsets.top)
         } action: { _, value in
-            // 只有当前页的偏移参与计算：滑动过程中相邻页也会上报，
-            // 全收会让金额来回跳。
-            if item == section {
-                scrollOffset = max(0, value)
+            if item == section { scrollOffset = value }
+        }
+        .frame(width: width, height: height, alignment: .top)
+    }
+
+    @ViewBuilder
+    private func cardContent(_ item: Section) -> some View {
+        VStack(spacing: 12) {
+            switch item {
+            case .income: IncomeSectionView()
+            case .special: SpecialSectionView()
+            case .social: SocialSectionView()
+            case .ytd: YtdSectionView()
+            case .deduction: DeductionSectionView()
+            case .overtime: OvertimeSectionView()
             }
         }
+        .padding(.bottom, 4)
     }
 
-    /// 金额随滚动上移，移出标题栏后淡出
+    /// 金额随滚动上移并淡出
     private var heroOpacity: Double {
-        let travelled = Double(scrollOffset)
-        return max(0, 1 - travelled / 120)
+        max(0, 1 - Double(scrollOffset) / 120)
     }
 
+    // MARK: 顶栏内容
 
-
-    // MARK: 固定标题栏（标题 + 齿轮，Liquid Glass 背景）
-
-    /// 标题栏固定在顶部，背景是 iOS 26 的 Liquid Glass。
-    ///
-    /// 两个和上一版不同的决定：
-    ///
-    /// 1. 玻璃常显，不再从 0 渐变。之前用 `opacity(scrollOffset/24)`，
-    ///    没滚动时完全透明，深色壁纸下几乎察觉不到玻璃存在，
-    ///    看起来就像「只有浅色模式生效」。
-    /// 2. 统一用 `.regular` 而不是按主题切 `.clear`。`.clear` 在深色
-    ///    壁纸上比底色还暗，只会更看不清；`.regular` 在两种主题下都能
-    ///    提供稳定的对比度。深色下额外叠一层极淡的黑，让玻璃有实体感。
-    private func headerBar(topPad: CGFloat) -> some View {
+    /// 标题 + 齿轮。**不含背景** —— 背景是 ZStack 里的独立一层，
+    /// 这样这里量出来的高度不会和安全区互相干扰。
+    private func headerContent(topPad: CGFloat) -> some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("工资单")
@@ -263,17 +265,6 @@ struct RootView: View {
         .padding(.horizontal, 16)
         .padding(.top, topPad)
         .padding(.bottom, 10)
-        .background {
-            Rectangle()
-                .fill(.clear)
-                .glassEffect(.regular, in: .rect(cornerRadius: 0))
-                .overlay {
-                    // 深色下玻璃本身偏暗，再薄薄叠一层黑，边界才立得住
-                    Rectangle()
-                        .fill(.black.opacity(systemScheme == .dark ? 0.14 : 0.03))
-                }
-                .ignoresSafeArea(edges: .top)
-        }
     }
 
     // MARK: 金额
@@ -298,26 +289,10 @@ struct RootView: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 16)
         .padding(.vertical, 4)
+        .padding(.bottom, 8)
     }
 
-    // MARK: 卡片内容
-
-    @ViewBuilder
-    private func cardContent(_ item: Section) -> some View {
-        VStack(spacing: 12) {
-            switch item {
-            case .income: IncomeSectionView()
-            case .special: SpecialSectionView()
-            case .social: SocialSectionView()
-            case .ytd: YtdSectionView()
-            case .deduction: DeductionSectionView()
-            case .overtime: OvertimeSectionView()
-            }
-        }
-        .padding(.bottom, 4)
-    }
-
-    // MARK: 底部浮动工具栏
+    // MARK: 底部工具栏
 
     private var bottomBar: some View {
         HStack(spacing: 0) {
@@ -340,10 +315,7 @@ struct RootView: View {
         }
     }
 
-    /// 圆形玻璃按钮。
-    ///
-    /// `.glassEffect` 必须挂在 Button **外层**：挂在 label 上时玻璃层会
-    /// 接管命中测试，按钮收不到点击。同时用 contentShape 明确命中区域。
+    /// `.glassEffect` 必须挂在 Button 外层，挂在 label 上会吞掉点击
     private func glassCircleButton(
         systemName: String,
         label: String,
@@ -361,7 +333,6 @@ struct RootView: View {
         .accessibilityLabel(label)
     }
 
-    /// 圆点：点任意一个直接跳过去；选中的拉长成短横线
     private var pageDots: some View {
         HStack(spacing: 7) {
             ForEach(Section.allCases) { item in
@@ -373,7 +344,7 @@ struct RootView: View {
                     Capsule()
                         .fill(section == item ? onWallpaper : onWallpaper.opacity(0.45))
                         .frame(width: section == item ? 20 : 7, height: 7)
-                        .frame(width: 18, height: 44)   // 触摸目标够大，视觉上仍是小圆点
+                        .frame(width: 18, height: 44)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -387,7 +358,6 @@ struct RootView: View {
 
 // MARK: - 栏目跳转
 
-/// 栏目列表里点某一项时，通过 environment 把目标传回 RootView。
 @Observable
 final class SectionJump {
     var target: RootView.Section?
