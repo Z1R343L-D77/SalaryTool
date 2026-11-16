@@ -19,6 +19,7 @@ win/salarytool.exe
 ios/src-tauri/gen/apple/build/
 ios/build/
 ios/out/
+ios/screenshots/
 
 # 个人工资备份，含真实数据，绝不提交
 win/configs/salarytool-backup-*.json
