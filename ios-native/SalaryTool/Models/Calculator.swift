@@ -119,17 +119,20 @@ enum Calculator {
         )
     }
 
-    static func clampBase(_ base: Double, _ min: Double, _ max: Double) -> Double {
+    /// 参数名不能叫 min / max —— 会把 Swift 的同名函数遮蔽掉
+    static func clampBase(_ base: Double, lower lowerBound: Double, upper upperBound: Double) -> Double {
         let value = Money.nonNegative(base)
-        let lower = Money.nonNegative(min)
-        let upper = max > 0 ? Money.nonNegative(max) : Double.infinity
-        return Money.round2(min(max(value, lower), upper))
+        let lower = Money.nonNegative(lowerBound)
+        let upper = upperBound > 0 ? Money.nonNegative(upperBound) : Double.infinity
+        return Money.round2(Swift.min(Swift.max(value, lower), upper))
     }
 
     static func social(_ config: SocialConfig) -> SocialBreakdown {
-        let socialBase = clampBase(config.socialBase, config.socialBaseMin, config.socialBaseMax)
+        let socialBase = clampBase(config.socialBase, lower: config.socialBaseMin, upper: config.socialBaseMax)
         let fundBase = clampBase(
-            config.housingFundBase, config.housingFundBaseMin, config.housingFundBaseMax
+            config.housingFundBase,
+            lower: config.housingFundBaseMin,
+            upper: config.housingFundBaseMax
         )
 
         let pension = Money.round2(socialBase * Money.nonNegative(config.pensionRate))
@@ -171,15 +174,15 @@ enum Calculator {
         if state.socialBaseMode == "auto" {
             config.socialBase = clampBase(
                 suggestSocialBase(state.incomes),
-                state.social.socialBaseMin,
-                state.social.socialBaseMax
+                lower: state.social.socialBaseMin,
+                upper: state.social.socialBaseMax
             )
         }
         if state.housingFundBaseMode == "auto" {
             config.housingFundBase = clampBase(
                 suggestHousingFundBase(state.incomes),
-                state.social.housingFundBaseMin,
-                state.social.housingFundBaseMax
+                lower: state.social.housingFundBaseMin,
+                upper: state.social.housingFundBaseMax
             )
         }
         return config
