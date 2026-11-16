@@ -105,6 +105,8 @@
   --wallpaper-image: url("../assets/wallpaper.jpg");
   --wallpaper-position: center 58%;
   --wallpaper-vignette: inset 0 0 300px rgba(0, 0, 0, 0.7);
+  /* 浅色主题会把壁纸大幅提亮，深色下不需要 */
+  --wallpaper-filter: none;
 }
 
 /*
@@ -261,8 +263,13 @@
   --menu-bg: rgba(252, 253, 255, 0.96);
   --option-bg: #ffffff;
 
-  /* 浅色壁纸要压得更狠一些，否则白字会浮 */
-  --wallpaper-vignette: inset 0 0 240px rgba(255, 255, 255, 0.55);
+  /*
+   * 浅色主题下，深色实景壁纸必须大幅提亮才配得上白玻璃 ——
+   * 否则「工资单」这类直接压在壁纸上的文字会变成黑字压深底，完全看不清。
+   * 提亮 + 降饱和 + 白色蒙版，三者一起才不会让照片发灰。
+   */
+  --wallpaper-filter: brightness(1.9) saturate(0.45) contrast(0.88);
+  --wallpaper-vignette: inset 0 0 260px rgba(255, 255, 255, 0.72);
 }
 
 /*
@@ -453,9 +460,11 @@ body::after {
   background-size: cover;
   background-position: var(--wallpaper-position);
   background-repeat: no-repeat;
-  /* 四周压暗，中间留出富士山；玻璃叠上去才有层次 */
+  /* 浅色主题靠滤镜把壁纸提亮，深色下是 none */
+  filter: var(--wallpaper-filter);
+  /* 四周压暗（浅色下是压亮），玻璃叠上去才有层次 */
   box-shadow: var(--wallpaper-vignette);
-  transition: opacity 260ms ease-out;
+  transition: opacity 260ms ease-out, filter 260ms ease-out;
 }
 
 /* iOS 不显示滚动条，用惯性滚动即可 */
