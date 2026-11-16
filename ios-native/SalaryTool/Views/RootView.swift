@@ -15,6 +15,7 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(SalaryStore.self) private var store
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var section: Section = .income
     @State private var showSettings = false
     @State private var showImport = false
@@ -91,7 +92,10 @@ struct RootView: View {
             HStack(spacing: 8) {
                 ForEach(Section.allCases) { item in
                     Button {
-                        withAnimation(.snappy(duration: 0.22)) { section = item }
+                        // HIG：减弱动态效果时改用交叉淡入，不做位置动画
+                        withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .snappy(duration: 0.22)) {
+                            section = item
+                        }
                     } label: {
                         HStack(spacing: 5) {
                             Text(item.label)
@@ -180,8 +184,12 @@ struct RootView: View {
                 Text("¥\(Money.format(store.result.netPay))")
                     .font(.system(size: 26, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .contentTransition(.numericText())
-                    .animation(.snappy, value: store.result.netPay)
+                    // 金额变化用数字滚动，而不是整块渐变 —— 能看清是哪位在变
+                    .contentTransition(reduceMotion ? .opacity : .numericText())
+                    .animation(
+                        reduceMotion ? .easeInOut(duration: 0.2) : .snappy,
+                        value: store.result.netPay
+                    )
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
