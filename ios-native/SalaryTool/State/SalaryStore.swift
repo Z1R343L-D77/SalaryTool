@@ -77,12 +77,15 @@ final class SalaryStore {
     }
 
     /// 状态文件的路径（放 Documents，用户能在「文件」App 里看到导出）
-    static var stateFileURL: URL {
-        documentsURL.appendingPathComponent("salarytool-state.json")
+    ///
+    /// nonisolated：写盘在后台线程做，不能受 @MainActor 限制。
+    nonisolated static var stateFileURL: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("salarytool-state.json")
     }
 
     private static func load() -> SalaryState? {
-        guard let data = try? Data(contentsOf: stateFileURL) else { return nil }
+        guard let data = try? Data(contentsOf: Self.stateFileURL) else { return nil }
         return try? JSONDecoder().decode(SalaryState.self, from: data)
     }
 
