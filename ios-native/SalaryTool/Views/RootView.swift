@@ -1,26 +1,28 @@
 //
 //  RootView.swift
-//  布局参照 iOS 自带的「天气」App：
+//  完全照 iOS 天气 App 的结构：
 //
 //    ┌──────────────────────────────┐
-//    │ 工资单                    ⚙   │  大标题压在壁纸上
-//    │ 上海 · 第 11 月               │
-//    │        ¥9,692.33             │  金额像气温一样居中放大
+//    │ 工资单                    ⚙   │  ← 这些都在滚动内容里，
+//    │ 上海 · 第 11 月               │     往下滑会一起滑走
+//    │        ¥9,692.33             │
 //    │        本月实发到手            │
 //    │                              │
-//    │   [内容卡片，可上下滑]         │
+//    │   [卡片]                      │
 //    │   [卡片]                      │
 //    │                              │
-//    │  ◯        • • • • • •      ◯ │  底部浮动玻璃工具栏
+//    │  ◯        • • • • • •      ◯ │  ← 浮动玻璃工具栏，始终可见
 //    └──────────────────────────────┘
 //
-//  三个要点：
-//  1. 壁纸与内容都铺满到状态栏 / Home 指示条底下，没有任何硬边界；
-//     只有文字和控件按安全区内缩。
-//  2. 底部三个控件是**透明 Liquid Glass**：左右两个圆形 + 中间胶囊，
-//     尺寸对齐天气 App 那一排。
-//  3. 深浅色切换必须作用到弹出的 sheet —— sheet 是独立的呈现上下文，
-//     不会继承根视图的 preferredColorScheme，要在每个 sheet 内容上再挂一次。
+//  几个关键点：
+//  1. TabView 铺满整屏（忽略安全区）。之前它只占「标题下方」那块，
+//     于是滚动内容被裁在一条硬边线上 —— 卡片顶部的圆角被切掉，
+//     看起来就是一个「四四方方的框」。铺满后裁切线落在屏幕外，看不见。
+//  2. 标题和金额放进每一页的滚动内容里，所以往下滑它们会自然滑走，
+//     不会像之前那样压在内容上方、还留一块空白。
+//  3. 内容底部留出工具栏高度 + 安全区，滚到底时最后一张卡完整露出，
+//     不会被玻璃挡住。
+//  4. 底部三个控件都是透明 Liquid Glass：左右 52pt 圆形 + 中间胶囊。
 //
 
 import SwiftUI
@@ -35,6 +37,9 @@ struct RootView: View {
     @State private var showSettings = false
     @State private var showDetail = false
     @State private var showSectionList = false
+
+    /// 底部工具栏本体高度（52）加上下留白，用于计算滚动内容的底部余量
+    private let dockHeight: CGFloat = 52
 
     enum Section: String, CaseIterable, Identifiable, Hashable {
         case income, special, social, ytd, deduction, overtime
@@ -87,25 +92,28 @@ struct RootView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            // 壁纸铺满整屏（含状态栏与 Home 指示条区域）
-            WallpaperView()
+        GeometryReader { proxy in
+            let safeTop = proxy.safeAreaInsets.top
+            let safeBottom = proxy.safeAreaInsets.bottom
+
+            ZStack(alignment: .bottom) {
+                WallpaperView()
+
+                TabView(selection: $section) {
+                    ForEach(Section.allCases) { item in
+                        page(item, safeTop: safeTop, safeBottom: safeBottom)
+                            .tag(item)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                // 内容可以一直滑到状态栏和 Home 指示条底下
                 .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                header
-                hero
-
-                pager
-                    // 底部工具栏是浮动的，内容要能滚到它底下
-                    .safeAreaInset(edge: .bottom) {
-                        Color.clear.frame(height: 72)
-                    }
+                bottomBar
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, max(safeBottom, 8) + 2)
             }
-
-            bottomBar
-                .padding(.horizontal, 16)
-                .padding(.bottom, 4)
+            .ignoresSafeArea()
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
@@ -129,6 +137,36 @@ struct RootView: View {
             }
             jump.target = nil
         }
+    }
+
+    // MARK: 单页：标题 + 金额 + 内容，整体一起滚动
+
+    private func page(_ item: Section, safeTop: CGFloat, safeBottom: CGFloat) -> some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                header
+                hero
+
+                VStack(spacing: 12) {
+                    switch item {
+                    case .income: IncomeSectionView()
+                    case .special: SpecialSectionView()
+                    case .social: SocialSectionView()
+                    case .ytd: YtdSectionView()
+                    case .deduction: DeductionSectionView()
+                    case .overtime: OvertimeSectionView()
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+            }
+            // 顶部留出状态栏高度：刚打开时标题在刘海下面
+            .padding(.top, safeTop + 4)
+            // 底部留出工具栏 + 安全区，滚到底时最后一张卡完整可见
+            .padding(.bottom, dockHeight + safeBottom + 40)
+        }
+        .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
     }
 
     // MARK: 顶部
@@ -160,7 +198,6 @@ struct RootView: View {
             .accessibilityLabel("设置")
         }
         .padding(.horizontal, 20)
-        .padding(.top, 2)
         .padding(.bottom, 4)
     }
 
@@ -192,58 +229,34 @@ struct RootView: View {
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 20)
-    }
-
-    // MARK: 翻页内容
-
-    private var pager: some View {
-        TabView(selection: $section) {
-            ForEach(Section.allCases) { item in
-                sectionContent(item)
-                    .tag(item)
-            }
-        }
-        .tabViewStyle(.page(indexDisplayMode: .never))
-    }
-
-    @ViewBuilder
-    private func sectionContent(_ item: Section) -> some View {
-        ScrollView {
-            VStack(spacing: 12) {
-                switch item {
-                case .income: IncomeSectionView()
-                case .special: SpecialSectionView()
-                case .social: SocialSectionView()
-                case .ytd: YtdSectionView()
-                case .deduction: DeductionSectionView()
-                case .overtime: OvertimeSectionView()
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 4)
-        }
-        .scrollIndicators(.hidden)
-        .scrollDismissesKeyboard(.interactively)
+        .padding(.bottom, 6)
     }
 
     // MARK: 底部浮动工具栏
     //
-    // 三个控件全是**透明玻璃**，尺寸对齐天气 App 那一排：
-    //   左 / 右 —— 52pt 圆形（.glassEffect 的 circle 形状）
-    //   中间   —— 52pt 高的胶囊，里面是圆点
-    // 玻璃会随下方壁纸实时折射，不是一块半透明灰。
+    // 三个控件全是透明玻璃：
+    //   左 / 右 —— 52pt 圆形
+    //   中间   —— 52pt 高胶囊，里面是圆点
+    // 间距 18pt，比之前松一些，和天气 App 那一排的呼吸感一致。
 
     private var bottomBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 0) {
+            // 左侧圆形贴边
             glassCircleButton(systemName: "list.bullet.rectangle", label: "明细") {
                 showDetail = true
             }
 
+            Spacer(minLength: 16)
+
+            // 中间胶囊居中
             pageDots
-                .padding(.horizontal, 4)
+                .padding(.horizontal, 12)
                 .frame(height: 52)
                 .glassEffect(.regular, in: .capsule)
 
+            Spacer(minLength: 16)
+
+            // 右侧圆形贴边
             glassCircleButton(systemName: "square.grid.2x2", label: "栏目列表") {
                 showSectionList = true
             }

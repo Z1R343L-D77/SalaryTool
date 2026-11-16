@@ -14,12 +14,12 @@ import SwiftUI
 
 /// 内容卡。
 ///
-/// HIG 里 Liquid Glass 是**控件层**的材质（工具栏、标签栏、浮动按钮），
-/// 明确不建议用作内容背景或大面积容器。所以内容卡用系统的语义材质
-/// `.regularMaterial` —— 它会随「增强对比度」「降低透明度」自动调整，
-/// 而玻璃不会。
+/// 用 `.ultraThinMaterial` 而不是 `.regularMaterial`：天气 App 的卡片
+/// 能看见云在后面流动，regular 太实了。ultraThin 仍是系统语义材质，
+/// 会响应「降低透明度」「增强对比度」，不像手搓的 rgba 那样在无障碍
+/// 设置下失效。
 struct GlassCard<Content: View>: View {
-    var cornerRadius: CGFloat = 26
+    var cornerRadius: CGFloat = 22
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -27,7 +27,7 @@ struct GlassCard<Content: View>: View {
             .padding(18)
             .background {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(.regularMaterial)
+                    .fill(.ultraThinMaterial)
             }
     }
 }
