@@ -411,39 +411,20 @@ struct YtdSectionView: View {
         }
     }
 
+    /// 按月记录列表。
+    ///
+    /// `@Bindable` 必须在这里再声明一次：`recordsList` 是独立计算属性，
+    /// body 里那个 `@Bindable var store` 不在它的作用域内。
+    ///
+    /// 另外，ForEach 里那串 Picker + Binding 嵌套太深，Swift 的类型检查器
+    /// 会超时（"unable to type-check in reasonable time"），所以把每一行
+    /// 抽成独立的 `recordRow` 视图。
     private var recordsList: some View {
-        VStack(spacing: 10) {
+        @Bindable var store = store
+
+        return VStack(spacing: 10) {
             ForEach($store.state.months) { $record in
-                InsetPanel(cornerRadius: 16) {
-                    VStack(spacing: 8) {
-                        HStack {
-                            Picker("月", selection: Binding(
-                                get: { Int($record.month) },
-                                set: { $record.month = Double($0) }
-                            )) {
-                                ForEach(months, id: \.self) { Text("\($0) 月").tag($0) }
-                            }
-                            .pickerStyle(.menu)
-                            .tint(.primary)
-
-                            Spacer()
-
-                            Button {
-                                store.removeMonth(id: record.id)
-                            } label: {
-                                Image(systemName: "trash")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.plain)
-                        }
-
-                        AmountField(value: $record.taxableIncome)
-                        AmountField(value: $record.socialDeduction)
-                        AmountField(value: $record.specialDeduction)
-                        AmountField(value: $record.taxPaid)
-                    }
-                }
+                recordRow(record: $record)
             }
 
             Button {
@@ -456,10 +437,38 @@ struct YtdSectionView: View {
                     .frame(height: 42)
                     .background {
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(Color.accentColor.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                            .strokeBorder(
+                                Color.accentColor.opacity(0.35),
+                                style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])
+                            )
                     }
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    /// 单条月度记录
+    private func recordRow(record: Binding<MonthRecord>) -> some View {
+        InsetPanel(cornerRadius: 16) {
+            VStack(spacing: 8) {
+                HStack {
+                    MonthPicker(month: record.month)
+                    Spacer()
+                    Button {
+                        store.removeMonth(id: record.wrappedValue.id)
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                AmountField(value: record.taxableIncome)
+                AmountField(value: record.socialDeduction)
+                AmountField(value: record.specialDeduction)
+                AmountField(value: record.taxPaid)
+            }
         }
     }
 
@@ -720,5 +729,24 @@ struct OvertimeSectionView: View {
                 set: { store.state.overtime.holidayHours = $0 }
             )
         }
+    }
+}
+
+// MARK: - 月份选择器
+
+/// 单独抽出来，避免在 ForEach 里嵌套太深导致类型检查超时
+private struct MonthPicker: View {
+    @Binding var month: Double
+
+    private static let months = Array(1...12)
+
+    var body: some View {
+        Picker("月份", selection: $month) {
+            ForEach(Self.months, id: \.self) { value in
+                Text("\(value) 月").tag(Double(value))
+            }
+        }
+        .pickerStyle(.menu)
+        .tint(.primary)
     }
 }
