@@ -53,7 +53,7 @@ const deductionPreset = ref(0);
 const showImport = ref(false);
 const showSettings = ref(false);
 const showDetail = ref(false);
-const appVersion = ref("0.2.0");
+const appVersion = ref("0.3.20261116");
 
 onMounted(async () => {
   appVersion.value = await getVersion();
