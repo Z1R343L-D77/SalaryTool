@@ -3,28 +3,31 @@
 //  布局参照 iOS 自带的「天气」App：
 //
 //    ┌──────────────────────────────┐
-//    │ 工资单                    ⚙   │  大标题 + 右上角设置
+//    │ 工资单                    ⚙   │  大标题压在壁纸上
 //    │ 上海 · 第 11 月               │
-//    │                              │
 //    │        ¥9,692.33             │  金额像气温一样居中放大
-//    │        本月实发到手            │  点一下看明细
+//    │        本月实发到手            │
 //    │                              │
-//    │   [收入项卡片]                │
-//    │   [卡片]                      │  左右滑动切换六个栏目
+//    │   [内容卡片，可上下滑]         │
 //    │   [卡片]                      │
 //    │                              │
-//    │  ┌─────────────────────────┐ │
-//    │  │ ⬚   ‹ ● ● ○ ○ ○ ○ ›   ☰ │ │  底部浮动工具栏
-//    │  └─────────────────────────┘ │
+//    │  ◯        • • • • • •      ◯ │  底部浮动玻璃工具栏
 //    └──────────────────────────────┘
 //
-//  左：明细    中：圆点翻页    右：栏目列表
+//  三个要点：
+//  1. 壁纸与内容都铺满到状态栏 / Home 指示条底下，没有任何硬边界；
+//     只有文字和控件按安全区内缩。
+//  2. 底部三个控件是**透明 Liquid Glass**：左右两个圆形 + 中间胶囊，
+//     尺寸对齐天气 App 那一排。
+//  3. 深浅色切换必须作用到弹出的 sheet —— sheet 是独立的呈现上下文，
+//     不会继承根视图的 preferredColorScheme，要在每个 sheet 内容上再挂一次。
 //
 
 import SwiftUI
 
 struct RootView: View {
     @Environment(SalaryStore.self) private var store
+    @Environment(AppearanceStore.self) private var appearance
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.sectionJump) private var jump
 
@@ -85,16 +88,18 @@ struct RootView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
+            // 壁纸铺满整屏（含状态栏与 Home 指示条区域）
             WallpaperView()
+                .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 header
                 hero
 
                 pager
-                    // 给底部工具栏留出空间，内容不会滚到它底下
+                    // 底部工具栏是浮动的，内容要能滚到它底下
                     .safeAreaInset(edge: .bottom) {
-                        Color.clear.frame(height: 84)
+                        Color.clear.frame(height: 72)
                     }
             }
 
@@ -102,10 +107,20 @@ struct RootView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 4)
         }
-        .sheet(isPresented: $showSettings) { SettingsView() }
-        .sheet(isPresented: $showDetail) { DetailView() }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+                .preferredColorScheme(appearance.preferredScheme)
+                .dynamicTypeSize(appearance.dynamicTypeSize)
+        }
+        .sheet(isPresented: $showDetail) {
+            DetailView()
+                .preferredColorScheme(appearance.preferredScheme)
+                .dynamicTypeSize(appearance.dynamicTypeSize)
+        }
         .sheet(isPresented: $showSectionList) {
             SectionListSheet(current: $section)
+                .preferredColorScheme(appearance.preferredScheme)
+                .dynamicTypeSize(appearance.dynamicTypeSize)
         }
         .onChange(of: jump.target) { _, newValue in
             guard let newValue else { return }
@@ -139,20 +154,17 @@ struct RootView: View {
                     .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)
-                    .background {
-                        Circle().fill(.white.opacity(0.18))
-                            .overlay(Circle().stroke(.white.opacity(0.22), lineWidth: 0.5))
-                    }
+                    .glassEffect(.regular.interactive(), in: .circle)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("设置")
         }
         .padding(.horizontal, 20)
-        .padding(.top, 4)
-        .padding(.bottom, 6)
+        .padding(.top, 2)
+        .padding(.bottom, 4)
     }
 
-    // MARK: 金额（像气温那样居中）
+    // MARK: 金额
 
     private var hero: some View {
         Button {
@@ -215,53 +227,48 @@ struct RootView: View {
     }
 
     // MARK: 底部浮动工具栏
+    //
+    // 三个控件全是**透明玻璃**，尺寸对齐天气 App 那一排：
+    //   左 / 右 —— 52pt 圆形（.glassEffect 的 circle 形状）
+    //   中间   —— 52pt 高的胶囊，里面是圆点
+    // 玻璃会随下方壁纸实时折射，不是一块半透明灰。
 
     private var bottomBar: some View {
-        HStack(spacing: 0) {
-            barButton(symbol: "list.bullet.rectangle", label: "明细") {
+        HStack(spacing: 12) {
+            glassCircleButton(systemName: "list.bullet.rectangle", label: "明细") {
                 showDetail = true
             }
 
-            Spacer(minLength: 2)
-
             pageDots
+                .padding(.horizontal, 4)
+                .frame(height: 52)
+                .glassEffect(.regular, in: .capsule)
 
-            Spacer(minLength: 2)
-
-            barButton(symbol: "square.grid.2x2", label: "栏目列表") {
+            glassCircleButton(systemName: "square.grid.2x2", label: "栏目列表") {
                 showSectionList = true
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background {
-            Capsule(style: .continuous)
-                .fill(.regularMaterial)
-                .overlay {
-                    Capsule(style: .continuous)
-                        .stroke(.white.opacity(0.16), lineWidth: 0.5)
-                }
-                .shadow(color: .black.opacity(0.3), radius: 18, y: 8)
-        }
     }
 
-    private func barButton(symbol: String, label: String, action: @escaping () -> Void) -> some View {
+    private func glassCircleButton(
+        systemName: String,
+        label: String,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(.primary)
-                .frame(width: 44, height: 44)
-                .background {
-                    Circle().fill(.primary.opacity(0.07))
-                }
+            Image(systemName: systemName)
+                .font(.system(size: 18, weight: .regular))
+                .foregroundStyle(.white)
+                .frame(width: 52, height: 52)
+                .glassEffect(.regular.interactive(), in: .circle)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
     }
 
-    /// 圆点翻页指示：点任意圆点直接跳过去
+    /// 圆点：点任意一个直接跳过去；选中的拉长成短横线
     private var pageDots: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 7) {
             ForEach(Section.allCases) { item in
                 Button {
                     withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .snappy(duration: 0.3)) {
@@ -269,9 +276,9 @@ struct RootView: View {
                     }
                 } label: {
                     Capsule()
-                        .fill(section == item ? Color.primary : Color.primary.opacity(0.26))
-                        .frame(width: section == item ? 18 : 7, height: 7)
-                        .frame(width: 20, height: 44)   // 触摸目标够大，视觉上仍是小圆点
+                        .fill(section == item ? Color.white : Color.white.opacity(0.45))
+                        .frame(width: section == item ? 20 : 7, height: 7)
+                        .frame(width: 18, height: 44)   // 触摸目标够大，视觉上仍是小圆点
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

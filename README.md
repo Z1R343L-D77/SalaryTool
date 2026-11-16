@@ -31,14 +31,20 @@ win/                    Windows 桌面版
 ├── scripts/            start.bat 的实际逻辑
 └── configs/            可直接导入的配置示例
 
-ios/                    iPhone 版
-├── src/                Vue 界面（单列 + 顶部滑动栏目 + 底部常驻金额）
-├── src-tauri/          Tauri Rust 侧（数据写 App 沙盒，导出走分享面板）
-└── .github/workflows/  iOS 构建流水线（macOS runner）
+ios-native/            iPhone 版（SwiftUI 原生，iOS 26+）
+├── SalaryTool/Models/  数据模型与计算核心（与 shared/ 一一对照）
+├── SalaryTool/State/   @Observable 状态、持久化、外观设置
+├── SalaryTool/Views/   天气 App 式布局：大标题 + 居中金额 + 翻页 + 玻璃工具栏
+├── SalaryToolTests/    单元测试（用例与 TS 版一致）
+└── project.yml         XcodeGen 工程定义
 ```
 
-`shared/` 通过 Vite 别名 `@shared` 引用，两边改一处、同时生效。
-两套外壳的界面是**分别维护**的：桌面三列布局和手机单列布局差异太大，强行共用组件反而更难读。
+`shared/` 通过 Vite 别名 `@shared` 引用，Windows 版直接用；iOS 原生版用 Swift
+重写了一份同样的算法（`Models/Calculator.swift`），靠共同测试用例保证结果一致。
+
+**为什么 iOS 不走 WebView**：iOS 26 的 Liquid Glass 是系统在 GPU 上实时算的
+分层模糊 + 边缘折射，只有原生视图能拿到（`.glassEffect()`）。WebView 的
+`backdrop-filter` 只能做单层高斯模糊，做不出那种「真的是一块玻璃」的质感。
 
 ## 下载
 
@@ -73,40 +79,31 @@ npm run tauri build  # 打包
 **iOS 只能在 macOS 上编译** —— 这是 Xcode 的授权限制，没有任何 Windows 移植方案。
 所以走 GitHub Actions 的 macOS runner：Windows 上写代码、push、云端编译、下载 `.ipa`。
 
-### 为什么不在本地做
-
-| 工作 | Windows 能干 | 说明 |
-| --- | --- | --- |
-| 改界面、改逻辑 | ✅ | iOS 外壳可以直接 `npm run dev` 在浏览器里预览 |
-| 生成 iOS 工程 | ❌ | `tauri ios init` 需要 Xcode |
-| 编译 / 签名 | ❌ | 同上 |
-| 装到设备 | ✅ | Sideloadly 等工具可以在 Windows 上签名安装 |
-
 ### 流程
 
-1. **本地开发**（Windows）：`cd ios && npm run dev`，用 Chrome DevTools 的 iPhone 视口预览。
-2. **云端编译**：在 GitHub Actions 页面手动触发 `Build iOS`，或打一个 `v*` tag。
-3. **下载产物**：从 Actions 的 Artifacts 里下载 `SalaryTool-unsigned-ipa`。
-4. **自签安装**（Windows）：
+1. **云端编译**：在 GitHub Actions 页面手动触发 `Build iOS (Native)`。
+2. **下载产物**：从 Artifacts 里下载 `SalaryTool-native-ipa`。
+3. **自签安装**（Windows）：
    - 用 [Sideloadly](https://sideloadly.io/) 把 `.ipa` 拖进去，填 Apple ID 签名，插线装到 iPhone。
    - 免费 Apple ID 签的 App **每 7 天过期**，重跑一次 Sideloadly 即可续签（数据保留）。
-5. **首次运行**：到 iPhone 的「设置 → 通用 → VPN 与设备管理」里信任你的开发者证书。
+4. **首次运行**：到 iPhone 的「设置 → 通用 → VPN 与设备管理」里信任你的开发者证书。
 
-### 首次需要做的事
+### 本地开发（需要 macOS）
 
-`ios/src-tauri/gen/apple/`（Xcode 工程骨架）只能由 macOS 生成。第一次跑完 CI 后，
-把那个目录提交回仓库 —— 它是构建产物但也是工程配置，每次重新生成既慢又会产生随机 diff。
+```bash
+brew install xcodegen
+cd ios-native && xcodegen generate
+open SalaryToolNative.xcodeproj
+```
 
 ### 数据存储
 
-iOS 版和 Windows 版存数据的方式不同，这是有意为之：
+iOS 版和 Windows 版存的是同一种 JSON，可以互相导入导出：
 
-- **Windows**：`localStorage` 就够稳，桌面 WebView 不会随便清。
-- **iOS**：主存储是 App 沙盒里的 JSON 文件（`Application Support` 目录），
-  `localStorage` 只作为首帧读取的缓存。因为 iOS 的 WKWebView 会在存储紧张时清理
-  localStorage —— 用户用了几个月、某天打开数据全没了，这种事是真实发生的。
-
-两边的数据格式完全一样，导出 JSON 可以互相导入。
+- **Windows**：`localStorage`，桌面 WebView 不会随便清。
+- **iOS**：App 文档目录下的 `salarytool-state.json`，原子写（临时文件 + rename）。
+  配合 Info.plist 里的 `UIFileSharingEnabled`，导出的备份会出现在
+  「文件 → 我的 iPhone → SalaryTool」里。
 
 ## 计算口径
 

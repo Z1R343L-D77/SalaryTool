@@ -103,6 +103,18 @@ final class AppearanceStore {
         }
     }
 
+    /// 字号档位映射到 Dynamic Type 的具体尺寸。
+    /// sheet 是独立的呈现上下文，不会继承根视图的 dynamicTypeSize，
+    /// 所以要在每个 sheet 上也挂一次。
+    var dynamicTypeSize: DynamicTypeSize {
+        switch fontScale {
+        case .small: .small
+        case .standard: .large
+        case .large: .xLarge
+        case .xlarge: .xxLarge
+        }
+    }
+
     func reset() {
         theme = .system
         fontScale = .standard

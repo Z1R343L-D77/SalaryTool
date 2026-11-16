@@ -13,15 +13,11 @@ dist
 dist-ssr
 *.local
 
-# 两套外壳各自的构建产物
+# 构建产物
 win/release/
 win/salarytool.exe
-ios/src-tauri/gen/apple/build/
-ios/build/
-ios/out/
 ios-native/build/
 ios-native/out/
-ios/screenshots/
 
 # 个人工资备份，含真实数据，绝不提交
 win/configs/salarytool-backup-*.json
@@ -32,14 +28,13 @@ configs/salarytool-backup-*.json
 src-tauri/target
 */src-tauri/target
 win/src-tauri/gen
-ios/src-tauri/gen
 
 # iOS 签名相关（含证书与描述文件，绝不提交）
 *.p12
 *.mobileprovision
 *.cer
-ios/src-tauri/gen/apple/*.xcworkspace/xcuserdata/
-ios/src-tauri/gen/apple/**/xcuserdata/
+ios-native/*.xcworkspace/xcuserdata/
+ios-native/**/xcuserdata/
 
 # Editor directories and files
 .vscode/*
