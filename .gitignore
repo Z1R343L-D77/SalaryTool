@@ -19,6 +19,8 @@ win/salarytool.exe
 ios/src-tauri/gen/apple/build/
 ios/build/
 ios/out/
+ios-native/build/
+ios-native/out/
 ios/screenshots/
 
 # 个人工资备份，含真实数据，绝不提交
