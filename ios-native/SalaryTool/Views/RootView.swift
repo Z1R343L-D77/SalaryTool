@@ -113,10 +113,20 @@ struct RootView: View {
                 TabView(selection: $section) {
                     ForEach(Section.allCases) { item in
                         sectionPage(item, topPad: safeTop + 4, safeBottom: safeBottom)
+                            // ★ 必须撑满：.page 样式的 TabView 会把「没有撑满
+                            //   页容器」的内容垂直居中。ScrollView 在页里如果不
+                            //   强制占满，TabView 就按内容高度居中它 ——
+                            //   卡片被推到屏幕中间就是这个原因。
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                             .tag(item)
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
+                // ★ 显式给定宽高。ZStack 里不给尺寸时 TabView 会按内容
+                //   撑成「刚好这么高」，.page 再把内容在这一块里垂直居中
+                //   → 卡片落到屏幕中间。这里用 GeometryReader 量到的实际
+                //   尺寸钉死，每页才有和屏幕完全一样的高度。
+                .frame(width: proxy.size.width, height: proxy.size.height)
                 .ignoresSafeArea()
 
                 // 金额：在 TabView 之外，所以左右翻页不动；
