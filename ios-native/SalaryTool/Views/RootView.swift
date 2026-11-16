@@ -1,14 +1,24 @@
 //
 //  RootView.swift
-//  主界面：大标题 + 横向栏目 + 单列内容 + 底部常驻金额。
-//
 //  布局参照 iOS 自带的「天气」App：
-//  - 大标题和小字副标题压在壁纸上（时间/地点那种层级）
-//  - 内容是一张张独立的圆角玻璃卡，卡与卡之间留一个手指宽的间距
-//  - 底部一条常驻摘要，随时能点开看明细
 //
-//  材质用 iOS 26 的 `.glassEffect()`，这是系统在 GPU 上算的分层模糊 + 折射，
-//  WebView 的 backdrop-filter 做不到。
+//    ┌──────────────────────────────┐
+//    │ 工资单                    ⚙   │  大标题 + 右上角设置
+//    │ 上海 · 第 11 月               │
+//    │                              │
+//    │        ¥9,692.33             │  金额像气温一样居中放大
+//    │        本月实发到手            │  点一下看明细
+//    │                              │
+//    │   [收入项卡片]                │
+//    │   [卡片]                      │  左右滑动切换六个栏目
+//    │   [卡片]                      │
+//    │                              │
+//    │  ┌─────────────────────────┐ │
+//    │  │ ⬚   ‹ ● ● ○ ○ ○ ○ ›   ☰ │ │  底部浮动工具栏
+//    │  └─────────────────────────┘ │
+//    └──────────────────────────────┘
+//
+//  左：明细    中：圆点翻页    右：栏目列表
 //
 
 import SwiftUI
@@ -16,13 +26,16 @@ import SwiftUI
 struct RootView: View {
     @Environment(SalaryStore.self) private var store
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.sectionJump) private var jump
+
     @State private var section: Section = .income
     @State private var showSettings = false
-    @State private var showImport = false
     @State private var showDetail = false
+    @State private var showSectionList = false
 
-    enum Section: String, CaseIterable, Identifiable {
+    enum Section: String, CaseIterable, Identifiable, Hashable {
         case income, special, social, ytd, deduction, overtime
+
         var id: String { rawValue }
 
         var label: String {
@@ -35,119 +48,157 @@ struct RootView: View {
             case .overtime: "加班"
             }
         }
+
+        var title: String {
+            switch self {
+            case .income: "收入项"
+            case .special: "专项附加扣除"
+            case .social: "社保 / 公积金"
+            case .ytd: "累计数据与年终奖"
+            case .deduction: "其他扣除"
+            case .overtime: "加班费"
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .income: "banknote"
+            case .special: "heart.text.square"
+            case .social: "building.columns"
+            case .ytd: "chart.line.uptrend.xyaxis"
+            case .deduction: "minus.circle"
+            case .overtime: "clock.badge.checkmark"
+            }
+        }
+
+        var subtitle: String {
+            switch self {
+            case .income: "工资 · 补贴 · 绩效"
+            case .special: "租房 · 教育 · 赡养"
+            case .social: "基数 · 比例"
+            case .ytd: "按月记录 · 年终奖"
+            case .deduction: "年金 · 请假扣款"
+            case .overtime: "1.5 / 2 / 3 倍"
+            }
+        }
     }
 
     var body: some View {
-        ZStack {
-            // 壁纸：和 Windows 版同一张，压暗后铺满
+        ZStack(alignment: .bottom) {
             WallpaperView()
 
             VStack(spacing: 0) {
                 header
-                tabBar
-                content
-                Spacer(minLength: 0)
-                dock
+                hero
+
+                pager
+                    // 给底部工具栏留出空间，内容不会滚到它底下
+                    .safeAreaInset(edge: .bottom) {
+                        Color.clear.frame(height: 84)
+                    }
             }
+
+            bottomBar
+                .padding(.horizontal, 16)
+                .padding(.bottom, 4)
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
-        .sheet(isPresented: $showImport) { ImportView() }
         .sheet(isPresented: $showDetail) { DetailView() }
+        .sheet(isPresented: $showSectionList) {
+            SectionListSheet(current: $section)
+        }
+        .onChange(of: jump.target) { _, newValue in
+            guard let newValue else { return }
+            withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .snappy(duration: 0.3)) {
+                section = newValue
+            }
+            jump.target = nil
+        }
     }
 
     // MARK: 顶部
 
     private var header: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 1) {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("工资单")
                     .font(.system(size: 34, weight: .bold))
                     .tracking(-0.6)
+                    .foregroundStyle(.white)
                 Text("\(CityRepository.policy(for: store.state.cityId).name) · 第 \(Int(store.state.ytd.monthIndex)) 月")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.75))
             }
 
             Spacer()
 
-            HStack(spacing: 8) {
-                GlassIconButton(systemName: "square.and.arrow.down") {
-                    showImport = true
-                }
-                GlassIconButton(systemName: "gearshape") {
-                    showSettings = true
-                }
-            }
-        }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 16)
-    }
-
-    // MARK: 栏目切换
-
-    private var tabBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(Section.allCases) { item in
-                    Button {
-                        // HIG：减弱动态效果时改用交叉淡入，不做位置动画
-                        withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .snappy(duration: 0.22)) {
-                            section = item
-                        }
-                    } label: {
-                        HStack(spacing: 5) {
-                            Text(item.label)
-                                .font(.subheadline.weight(.medium))
-                            if let badge = badge(for: item), !badge.isEmpty {
-                                Text(badge)
-                                    .font(.caption2)
-                                    .opacity(0.75)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .frame(minHeight: 44)
-                        .foregroundStyle(section == item ? Color.white : Color.primary)
-                        .background {
-                            if section == item {
-                                Capsule().fill(Color.accentColor)
-                            } else {
-                                Capsule().fill(.ultraThinMaterial)
-                            }
-                        }
+            Button {
+                showSettings = true
+            } label: {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background {
+                        Circle().fill(.white.opacity(0.18))
+                            .overlay(Circle().stroke(.white.opacity(0.22), lineWidth: 0.5))
                     }
-                    .buttonStyle(.plain)
-                }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 12)
+            .buttonStyle(.plain)
+            .accessibilityLabel("设置")
         }
-        .scrollBounceBehavior(.basedOnSize)
+        .padding(.horizontal, 20)
+        .padding(.top, 4)
+        .padding(.bottom, 6)
     }
 
-    private func badge(for section: Section) -> String? {
-        let r = store.result
-        switch section {
-        case .income: return "\(store.state.incomes.count)"
-        case .special:
-            return r.specialDeductionTotal > 0
-                ? Money.formatInteger(r.specialDeductionTotal) : nil
-        case .social:
-            return r.social.total > 0 ? Money.formatInteger(r.social.total) : nil
-        case .ytd: return "第\(Int(store.state.ytd.monthIndex))月"
-        case .deduction:
-            return store.state.deductions.isEmpty ? nil : "\(store.state.deductions.count)"
-        case .overtime: return nil
+    // MARK: 金额（像气温那样居中）
+
+    private var hero: some View {
+        Button {
+            showDetail = true
+        } label: {
+            VStack(spacing: 0) {
+                Text("¥\(Money.format(store.result.netPay))")
+                    .font(.system(size: 58, weight: .thin, design: .rounded))
+                    .monospacedDigit()
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+                    .contentTransition(reduceMotion ? .opacity : .numericText())
+                    .animation(
+                        reduceMotion ? .easeInOut(duration: 0.2) : .snappy,
+                        value: store.result.netPay
+                    )
+                Text("本月实发到手")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 20)
     }
 
-    // MARK: 内容
+    // MARK: 翻页内容
 
-    private var content: some View {
+    private var pager: some View {
+        TabView(selection: $section) {
+            ForEach(Section.allCases) { item in
+                sectionContent(item)
+                    .tag(item)
+            }
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+    }
+
+    @ViewBuilder
+    private func sectionContent(_ item: Section) -> some View {
         ScrollView {
             VStack(spacing: 12) {
-                switch section {
+                switch item {
                 case .income: IncomeSectionView()
                 case .special: SpecialSectionView()
                 case .social: SocialSectionView()
@@ -157,101 +208,89 @@ struct RootView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 12)
+            .padding(.top, 4)
         }
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
     }
 
-    // MARK: 底部常驻
+    // MARK: 底部浮动工具栏
 
-    private var dock: some View {
-        Button {
-            showDetail = true
-        } label: {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("本月实发到手")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("税前 \(Money.format(store.result.grossIncome))")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-
-                Spacer()
-
-                Text("¥\(Money.format(store.result.netPay))")
-                    .font(.system(size: 26, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    // 金额变化用数字滚动，而不是整块渐变 —— 能看清是哪位在变
-                    .contentTransition(reduceMotion ? .opacity : .numericText())
-                    .animation(
-                        reduceMotion ? .easeInOut(duration: 0.2) : .snappy,
-                        value: store.result.netPay
-                    )
+    private var bottomBar: some View {
+        HStack(spacing: 0) {
+            barButton(symbol: "list.bullet.rectangle", label: "明细") {
+                showDetail = true
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background {
-                if #available(iOS 26, *) {
-                    // 26 起：系统材质，随下层内容实时折射
-                    Rectangle().fill(.clear).glassEffect(.regular)
-                } else {
-                    Rectangle().fill(.ultraThinMaterial)
-                }
-            }
-            .overlay(alignment: .top) {
-                Rectangle()
-                    .fill(.white.opacity(0.12))
-                    .frame(height: 0.5)
+
+            Spacer(minLength: 2)
+
+            pageDots
+
+            Spacer(minLength: 2)
+
+            barButton(symbol: "square.grid.2x2", label: "栏目列表") {
+                showSectionList = true
             }
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background {
+            Capsule(style: .continuous)
+                .fill(.regularMaterial)
+                .overlay {
+                    Capsule(style: .continuous)
+                        .stroke(.white.opacity(0.16), lineWidth: 0.5)
+                }
+                .shadow(color: .black.opacity(0.3), radius: 18, y: 8)
+        }
     }
-}
 
-// MARK: - 小部件
-
-/// 圆形玻璃图标按钮
-struct GlassIconButton: View {
-    let systemName: String
-    let action: () -> Void
-
-    var body: some View {
+    private func barButton(symbol: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 17, weight: .medium))
+            Image(systemName: symbol)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(.primary)
                 .frame(width: 44, height: 44)
                 .background {
-                    if #available(iOS 26, *) {
-                        Circle().fill(.clear).glassEffect(.regular.interactive())
-                    } else {
-                        Circle().fill(.ultraThinMaterial)
-                    }
+                    Circle().fill(.primary.opacity(0.07))
                 }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
+    /// 圆点翻页指示：点任意圆点直接跳过去
+    private var pageDots: some View {
+        HStack(spacing: 6) {
+            ForEach(Section.allCases) { item in
+                Button {
+                    withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .snappy(duration: 0.3)) {
+                        section = item
+                    }
+                } label: {
+                    Capsule()
+                        .fill(section == item ? Color.primary : Color.primary.opacity(0.26))
+                        .frame(width: section == item ? 18 : 7, height: 7)
+                        .frame(width: 20, height: 44)   // 触摸目标够大，视觉上仍是小圆点
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(item.title)
+                .accessibilityAddTraits(section == item ? [.isSelected] : [])
+            }
+        }
+        .animation(reduceMotion ? nil : .snappy(duration: 0.26), value: section)
     }
 }
 
-/// 壁纸层：压暗的实景图，让上面的白色文字可读
-struct WallpaperView: View {
-    var body: some View {
-        GeometryReader { geo in
-            Image("wallpaper")
-                .resizable()
-                .scaledToFill()
-                .frame(width: geo.size.width, height: geo.size.height)
-                .clipped()
-                .overlay {
-                    LinearGradient(
-                        colors: [.black.opacity(0.28), .black.opacity(0.55)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                }
-                .ignoresSafeArea()
-        }
-    }
+// MARK: - 栏目跳转
+
+/// 栏目列表里点某一项时，通过 environment 把目标传回 RootView。
+@Observable
+final class SectionJump {
+    var target: RootView.Section?
+}
+
+extension EnvironmentValues {
+    @Entry var sectionJump = SectionJump()
 }

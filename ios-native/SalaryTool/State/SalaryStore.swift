@@ -181,6 +181,33 @@ final class SalaryStore {
         state.months.removeAll { $0.id == id }
     }
 
+    /// 日历改了之后，三档合计跟着更新。
+    ///
+    /// 桌面版是这个规则（`shared/` 注释里写了原因）：日历是按天记的真实工时，
+    /// 拿模糊的合计去反推每一天只能靠猜，一旦写进日历就把记录毁了。
+    /// 所以只做「日历 → 合计」这一个方向。
+    func syncHoursFromCalendar(entryModeCalendar: Bool) {
+        guard entryModeCalendar, let calendar = state.overtime.calendar else { return }
+        let hours = OvertimeMath.resolveHours(
+            OvertimeInput(
+                mode: state.overtime.mode,
+                entryMode: "calendar",
+                base: state.overtime.base,
+                followBasicSalary: state.overtime.followBasicSalary,
+                hourlyRate: state.overtime.hourlyRate,
+                monthlyDays: state.overtime.monthlyDays,
+                dailyHours: state.overtime.dailyHours,
+                weekdayHours: 0, weekendHours: 0, holidayHours: 0,
+                calendar: calendar
+            )
+        )
+        // 只在日历确实有记录时写回，避免用 0 覆盖掉手填的合计
+        if hours.workday + hours.rest + hours.holiday <= 0 { return }
+        state.overtime.weekdayHours = hours.workday
+        state.overtime.weekendHours = hours.rest
+        state.overtime.holidayHours = hours.holiday
+    }
+
     /// 切换到某个城市：只更新上下限与比例，不动已填的基数
     func applyCity(_ id: String) {
         let city = CityRepository.policy(for: id)
