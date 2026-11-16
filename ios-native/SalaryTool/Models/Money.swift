@@ -6,11 +6,19 @@
 import Foundation
 
 enum Money {
-    /// 四舍五入到 n 位小数
+    /// 四舍五入到 n 位小数。
+    ///
+    /// 不能直接 (value * factor).rounded()：
+    /// 1.005 * 100 在二进制浮点里是 100.49999999999999，会向下取整成 1.00。
+    /// TS 版用 `+ Number.EPSILON` 处理，这里改成加一个相对量级的 epsilon，
+    /// 效果一样但不依赖具体的机器 epsilon。
     static func round(_ value: Double, digits: Int = 2) -> Double {
         guard value.isFinite else { return 0 }
         let factor = pow(10.0, Double(digits))
-        return (value * factor).rounded() / factor
+        let scaled = value * factor
+        // 用 1e-9 的相对余量吸收二进制表示误差（金额最多四位小数，足够安全）
+        let nudged = scaled < 0 ? scaled - 1e-9 : scaled + 1e-9
+        return nudged.rounded() / factor
     }
 
     static func round2(_ value: Double) -> Double { round(value, digits: 2) }
