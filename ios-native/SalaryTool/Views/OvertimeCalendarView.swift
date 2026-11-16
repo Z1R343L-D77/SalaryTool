@@ -143,10 +143,11 @@ struct OvertimeCalendarView: View {
             }
             Divider().opacity(0.35)
 
-            ForEach(Array(weeks.enumerated()), id: \.offset) { _, week in
+            ForEach(Array(weeks.enumerated()), id: \.offset) { weekIndex, week in
                 HStack(spacing: 0) {
-                    ForEach(week) { day in
-                        if let day {
+                    // CalendarDay? 不满足 ForEach 对标识的要求，按索引遍历
+                    ForEach(Array(week.enumerated()), id: \.offset) { _, maybeDay in
+                        if let day = maybeDay {
                             dayCell(day)
                         } else {
                             Color.clear
@@ -155,7 +156,7 @@ struct OvertimeCalendarView: View {
                         }
                     }
                 }
-                if week != weeks.last {
+                if weekIndex != weeks.count - 1 {
                     Divider().opacity(0.18)
                 }
             }
