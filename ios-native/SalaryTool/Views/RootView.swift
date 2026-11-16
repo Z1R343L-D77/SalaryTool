@@ -52,11 +52,6 @@ struct RootView: View {
             : Color.black.opacity(0.55)
     }
 
-    /// 玻璃材质厚度：浅色主题下 .regular 太实，用 .clear
-    private var glassVariant: Glass {
-        systemScheme == .dark ? .regular : .clear
-    }
-
     enum Section: String, CaseIterable, Identifiable, Hashable {
         case income, special, social, ytd, deduction, overtime
 
@@ -128,14 +123,19 @@ struct RootView: View {
 
                 // 金额：在 TabView 之外，所以左右翻页不动；
                 // 按当前页的滚动偏移上移，所以上下滚时跟着走。
+                //
+                // 量测必须在 padding 之前：onGeometryChange 报的是所有修饰器
+                // 作用完的尺寸，先加 padding 再量会把「标题高度」也算进
+                // heroHeight，占位块再加一次 headerHeight 就翻倍了
+                // —— 卡片被推到屏幕中间正是这个原因。
                 hero
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { value in
+                        heroHeight = value
+                    }
                     .padding(.top, headerHeight + 2)
                     .offset(y: -scrollOffset)
                     .opacity(heroOpacity)
                     .allowsHitTesting(false)
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { value in
-                        heroHeight = value
-                    }
 
                 // 固定标题：Liquid Glass 背景，滚动内容从它下面穿过
                 headerBar(topPad: safeTop + 4)
@@ -216,11 +216,14 @@ struct RootView: View {
 
     /// 标题栏固定在顶部，背景是 iOS 26 的 Liquid Glass。
     ///
-    /// 和上一版的区别：之前用 `.ultraThinMaterial`（系统模糊材质，只是把
-    /// 后面的内容糊掉），现在用 `.glassEffect` —— 会折射背景、带镜面高光
-    /// 和边缘光，滚上来的内容是"透过一块玻璃"看到的。
+    /// 两个和上一版不同的决定：
     ///
-    /// 起始位置玻璃完全透明（看见干净壁纸），滚 24pt 内渐变到实心。
+    /// 1. 玻璃常显，不再从 0 渐变。之前用 `opacity(scrollOffset/24)`，
+    ///    没滚动时完全透明，深色壁纸下几乎察觉不到玻璃存在，
+    ///    看起来就像「只有浅色模式生效」。
+    /// 2. 统一用 `.regular` 而不是按主题切 `.clear`。`.clear` 在深色
+    ///    壁纸上比底色还暗，只会更看不清；`.regular` 在两种主题下都能
+    ///    提供稳定的对比度。深色下额外叠一层极淡的黑，让玻璃有实体感。
     private func headerBar(topPad: CGFloat) -> some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
@@ -245,7 +248,7 @@ struct RootView: View {
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .glassEffect(glassVariant.interactive(), in: .circle)
+            .glassEffect(.regular.interactive(), in: .circle)
             .accessibilityLabel("设置")
         }
         .padding(.horizontal, 16)
@@ -254,15 +257,14 @@ struct RootView: View {
         .background {
             Rectangle()
                 .fill(.clear)
-                .glassEffect(glassVariant, in: .rect(cornerRadius: 0))
-                .opacity(backgroundOpacity)
+                .glassEffect(.regular, in: .rect(cornerRadius: 0))
+                .overlay {
+                    // 深色下玻璃本身偏暗，再薄薄叠一层黑，边界才立得住
+                    Rectangle()
+                        .fill(.black.opacity(systemScheme == .dark ? 0.14 : 0.03))
+                }
                 .ignoresSafeArea(edges: .top)
         }
-    }
-
-    /// 滚动 24pt 内背景由透明变实
-    private var backgroundOpacity: Double {
-        min(1, Double(scrollOffset) / 24)
     }
 
     // MARK: 金额
@@ -319,7 +321,7 @@ struct RootView: View {
             pageDots
                 .padding(.horizontal, 12)
                 .frame(height: 52)
-                .glassEffect(glassVariant, in: .capsule)
+                .glassEffect(.regular, in: .capsule)
 
             Spacer(minLength: 16)
 
@@ -346,7 +348,7 @@ struct RootView: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .glassEffect(glassVariant.interactive(), in: .circle)
+        .glassEffect(.regular.interactive(), in: .circle)
         .accessibilityLabel(label)
     }
 
