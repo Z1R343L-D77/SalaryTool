@@ -12,7 +12,12 @@ import SwiftUI
 
 // MARK: - 卡片
 
-/// 主容器：半透明玻璃 + 26 圆角
+/// 内容卡。
+///
+/// HIG 里 Liquid Glass 是**控件层**的材质（工具栏、标签栏、浮动按钮），
+/// 明确不建议用作内容背景或大面积容器。所以内容卡用系统的语义材质
+/// `.regularMaterial` —— 它会随「增强对比度」「降低透明度」自动调整，
+/// 而玻璃不会。
 struct GlassCard<Content: View>: View {
     var cornerRadius: CGFloat = 26
     @ViewBuilder var content: Content
@@ -21,14 +26,8 @@ struct GlassCard<Content: View>: View {
         content
             .padding(18)
             .background {
-                if #available(iOS 26, *) {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.clear)
-                        .glassEffect(.regular)
-                } else {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                }
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(.regularMaterial)
             }
     }
 }
@@ -40,7 +39,7 @@ struct InsetPanel<Content: View>: View {
 
     var body: some View {
         content
-            .padding(14)
+            .padding(12)
             .background {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(.primary.opacity(0.055))
@@ -95,7 +94,7 @@ struct ToggleChip: View {
                 .font(.subheadline.weight(isOn ? .semibold : .regular))
                 .foregroundStyle(isOn ? Color.white : Color.secondary)
                 .padding(.horizontal, 14)
-                .frame(minHeight: 34)
+                .frame(minHeight: 44)
                 .background {
                     Capsule()
                         .fill(isOn ? Color.accentColor : Color.primary.opacity(0.07))
@@ -150,7 +149,7 @@ struct AmountField: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 14)
-        .frame(height: 46)
+        .frame(height: 48)
         .background {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(.primary.opacity(focused ? 0.09 : 0.055))
@@ -217,7 +216,7 @@ struct SegmentedPicker<T: Hashable>: View {
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(selection == option.value ? Color.primary : Color.secondary)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 34)
+                        .frame(height: 36)
                         .background {
                             if selection == option.value {
                                 RoundedRectangle(cornerRadius: 9, style: .continuous)
