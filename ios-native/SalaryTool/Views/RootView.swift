@@ -113,27 +113,32 @@ struct RootView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let safeTop = proxy.safeAreaInsets.top
             let safeBottom = proxy.safeAreaInsets.bottom
 
             ZStack(alignment: .bottom) {
+                // 壁纸铺满整屏（含状态栏与 Home 指示条区域）
                 WallpaperView()
+                    .ignoresSafeArea()
 
-                TabView(selection: $section) {
-                    ForEach(Section.allCases) { item in
-                        page(item, safeTop: safeTop, safeBottom: safeBottom)
-                            .tag(item)
+                VStack(spacing: 0) {
+                    // 标题和金额固定，不参与滚动、也不参与左右翻页
+                    header
+                    hero
+
+                    // 只有这里会上下滚 / 左右滑
+                    TabView(selection: $section) {
+                        ForEach(Section.allCases) { item in
+                            page(item, safeBottom: safeBottom)
+                                .tag(item)
+                        }
                     }
+                    .tabViewStyle(.page(indexDisplayMode: .never))
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                // 内容可以一直滑到状态栏和 Home 指示条底下
-                .ignoresSafeArea()
 
                 bottomBar
                     .padding(.horizontal, 16)
                     .padding(.bottom, max(safeBottom, 8) + 2)
             }
-            .ignoresSafeArea()
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
@@ -159,30 +164,27 @@ struct RootView: View {
         }
     }
 
-    // MARK: 单页：标题 + 金额 + 内容，整体一起滚动
+    // MARK: 单页内容
 
-    private func page(_ item: Section, safeTop: CGFloat, safeBottom: CGFloat) -> some View {
+    /// 每个栏目一页，只承载卡片本身。
+    ///
+    /// 标题和金额被提到外面固定住了 —— 上下滚动时它们不动，
+    /// 左右翻页时它们也不跟着滑走（之前放在页内，两者都会动）。
+    private func page(_ item: Section, safeBottom: CGFloat) -> some View {
         ScrollView {
-            VStack(spacing: 0) {
-                header
-                hero
-
-                VStack(spacing: 12) {
-                    switch item {
-                    case .income: IncomeSectionView()
-                    case .special: SpecialSectionView()
-                    case .social: SocialSectionView()
-                    case .ytd: YtdSectionView()
-                    case .deduction: DeductionSectionView()
-                    case .overtime: OvertimeSectionView()
-                    }
+            VStack(spacing: 12) {
+                switch item {
+                case .income: IncomeSectionView()
+                case .special: SpecialSectionView()
+                case .social: SocialSectionView()
+                case .ytd: YtdSectionView()
+                case .deduction: DeductionSectionView()
+                case .overtime: OvertimeSectionView()
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
             }
-            // 顶部留出状态栏高度：刚打开时标题在刘海下面
-            .padding(.top, safeTop + 4)
-            // 底部留出工具栏 + 安全区，滚到底时最后一张卡完整可见
+            .padding(.horizontal, 16)
+            .padding(.top, 4)
+            // 底部留出工具栏 + 安全区，滚到底时最后一张卡完整露出
             .padding(.bottom, dockHeight + safeBottom + 40)
         }
         .scrollIndicators(.hidden)
