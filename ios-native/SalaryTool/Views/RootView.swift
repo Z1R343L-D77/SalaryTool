@@ -32,12 +32,10 @@ struct RootView: View {
     @State private var showDetail = false
     @State private var showSectionList = false
 
-    /// 当前滚动偏移，用来让固定标题的背景渐变浮现
+    /// 当前页的滚动偏移，金额层按它上移
     @State private var scrollOffset: CGFloat = 0
-    /// 固定标题栏的实测高度，滚动内容顶部要给它让位
+    /// 固定标题栏的实测高度，用来给金额层定位
     @State private var headerHeight: CGFloat = 0
-    /// 金额块的实测高度，同样用于内容占位
-    @State private var heroHeight: CGFloat = 96
 
     private let dockHeight: CGFloat = 52
 
@@ -114,7 +112,7 @@ struct RootView: View {
                 // 也不存在「切页时 frame 变高变矮」的问题。
                 TabView(selection: $section) {
                     ForEach(Section.allCases) { item in
-                        sectionPage(item, safeBottom: safeBottom)
+                        sectionPage(item, topPad: safeTop + 4, safeBottom: safeBottom)
                             .tag(item)
                     }
                 }
@@ -123,21 +121,14 @@ struct RootView: View {
 
                 // 金额：在 TabView 之外，所以左右翻页不动；
                 // 按当前页的滚动偏移上移，所以上下滚时跟着走。
-                //
-                // 量测必须在 padding 之前：onGeometryChange 报的是所有修饰器
-                // 作用完的尺寸，先加 padding 再量会把「标题高度」也算进
-                // heroHeight，占位块再加一次 headerHeight 就翻倍了
-                // —— 卡片被推到屏幕中间正是这个原因。
                 hero
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { value in
-                        heroHeight = value
-                    }
                     .padding(.top, headerHeight + 2)
                     .offset(y: -scrollOffset)
                     .opacity(heroOpacity)
                     .allowsHitTesting(false)
 
-                // 固定标题：Liquid Glass 背景，滚动内容从它下面穿过
+                // 固定标题：Liquid Glass 背景，滚动内容从它下面穿过。
+                // 高度只由它自己上报，不参与任何「再算一遍」的组合。
                 headerBar(topPad: safeTop + 4)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { value in
                         headerHeight = value
@@ -178,15 +169,23 @@ struct RootView: View {
 
     /// 每个栏目一页，自带 ScrollView。
     ///
-    /// 顶部留出「标题栏 + 金额」的高度当占位，内容不会一上来就压在它们下面；
-    /// 滚动偏移会上报给外面的金额层，让它同步上移。
-    private func sectionPage(_ item: Section, safeBottom: CGFloat) -> some View {
+    /// 顶部的占位不是「用测量出来的高度画一块空白」，而是**放一份隐藏的
+    /// 真实视图**（`.hidden()` 不渲染但仍然占位）。这样占位高度永远和
+    /// 浮动层严丝合缝，不会因为测量时机、修饰器顺序、字号变化而错位。
+    ///
+    /// 上一版用 `Color.clear.frame(height: headerHeight + heroHeight)`，
+    /// 结果两个测量值把彼此的高度也算进去了，占位翻了倍，卡片被推到屏幕中间。
+    private func sectionPage(_ item: Section, topPad: CGFloat, safeBottom: CGFloat) -> some View {
         ScrollView {
             VStack(spacing: 0) {
-                // 标题栏 + 金额占的高度
-                Color.clear.frame(height: headerHeight + heroHeight + 6)
+                // 与浮动层同尺寸的透明副本，只用来撑开空间
+                headerBar(topPad: topPad)
+                    .hidden()
+                hero
+                    .hidden()
 
                 cardContent(item)
+                    .padding(.top, 6)
             }
             .padding(.horizontal, 16)
             .padding(.bottom, dockHeight + safeBottom + 32)
