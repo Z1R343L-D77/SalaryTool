@@ -69,7 +69,7 @@ struct RootView: View {
 
             Spacer()
 
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 GlassIconButton(systemName: "square.and.arrow.down") {
                     showImport = true
                 }
@@ -79,9 +79,9 @@ struct RootView: View {
             }
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, 20)
-        .padding(.top, 6)
-        .padding(.bottom, 14)
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 16)
     }
 
     // MARK: 栏目切换
@@ -103,7 +103,7 @@ struct RootView: View {
                             }
                         }
                         .padding(.horizontal, 16)
-                        .padding(.vertical, 9)
+                        .frame(minHeight: 44)
                         .foregroundStyle(section == item ? Color.white : Color.primary)
                         .background {
                             if section == item {
@@ -116,7 +116,7 @@ struct RootView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 16)
             .padding(.bottom, 12)
         }
         .scrollBounceBehavior(.basedOnSize)
@@ -183,7 +183,7 @@ struct RootView: View {
                     .contentTransition(.numericText())
                     .animation(.snappy, value: store.result.netPay)
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 16)
             .padding(.vertical, 12)
             .background {
                 if #available(iOS 26, *) {
@@ -214,7 +214,7 @@ struct GlassIconButton: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 17, weight: .medium))
-                .frame(width: 40, height: 40)
+                .frame(width: 44, height: 44)
                 .background {
                     if #available(iOS 26, *) {
                         Circle().fill(.clear).glassEffect(.regular.interactive())
