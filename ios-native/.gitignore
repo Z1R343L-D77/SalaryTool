@@ -1,0 +1,14 @@
+# XcodeGen 生成物
+*.xcodeproj
+*.xcworkspace
+
+# 构建产物
+build/
+DerivedData/
+out/
+
+# 个人数据
+*.p12
+*.mobileprovision
+
+.DS_Store
