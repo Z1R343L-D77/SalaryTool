@@ -15,7 +15,7 @@
 //  三个方向的行为严格分开：
 //  - 上下滚：标题不动（毛玻璃浮起），金额和卡片一起滚
 //  - 左右翻：只有卡片区在翻，金额不动（它在 TabView 之外）
-//  - 横滑不跳：五页共用最大高度 + 顶部对齐，见 cardsPager
+//  - 横滑不跳：每页自带 ScrollView，页面高度天然等于屏幕
 //
 
 import SwiftUI
@@ -32,14 +32,12 @@ struct RootView: View {
     @State private var showDetail = false
     @State private var showSectionList = false
 
-    /// 每页卡片的实测高度。TabView 嵌在 ScrollView 里必须有确定高度，
-    /// 而且五页共用最大高度，否则横滑时高度跳动。
-    @State private var pageHeights: [Section: CGFloat] = [:]
-
     /// 当前滚动偏移，用来让固定标题的背景渐变浮现
     @State private var scrollOffset: CGFloat = 0
     /// 固定标题栏的实测高度，滚动内容顶部要给它让位
     @State private var headerHeight: CGFloat = 0
+    /// 金额块的实测高度，同样用于内容占位
+    @State private var heroHeight: CGFloat = 96
 
     private let dockHeight: CGFloat = 52
 
@@ -117,27 +115,29 @@ struct RootView: View {
             ZStack(alignment: .top) {
                 WallpaperView()
 
-                // 内容可以滚到状态栏底下（被固定标题的毛玻璃盖住）
-                ScrollView {
-                    VStack(spacing: 0) {
-                        // 给固定标题让位
-                        Color.clear.frame(height: headerHeight)
-                        hero
-                        cardsPager
+                // 每页自带 ScrollView：内容多长就多长，短页不会留空白，
+                // 也不存在「切页时 frame 变高变矮」的问题。
+                TabView(selection: $section) {
+                    ForEach(Section.allCases) { item in
+                        sectionPage(item, safeBottom: safeBottom)
+                            .tag(item)
                     }
-                    .padding(.horizontal, 16)
-                    // 底部留出工具栏 + 安全区，滚到底时最后一张卡完整露出
-                    .padding(.bottom, dockHeight + safeBottom + 32)
                 }
-                .scrollIndicators(.hidden)
-                .scrollDismissesKeyboard(.interactively)
-                .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                    geometry.contentOffset.y + geometry.contentInsets.top
-                } action: { _, value in
-                    scrollOffset = max(0, value)
-                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .ignoresSafeArea()
 
-                // 固定标题：上下滚不动，左右翻也不动（在 TabView 之外）
+                // 金额：在 TabView 之外，所以左右翻页不动；
+                // 按当前页的滚动偏移上移，所以上下滚时跟着走。
+                hero
+                    .padding(.top, headerHeight + 2)
+                    .offset(y: -scrollOffset)
+                    .opacity(heroOpacity)
+                    .allowsHitTesting(false)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { value in
+                        heroHeight = value
+                    }
+
+                // 固定标题：Liquid Glass 背景，滚动内容从它下面穿过
                 headerBar(topPad: safeTop + 4)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { value in
                         headerHeight = value
@@ -174,12 +174,53 @@ struct RootView: View {
         }
     }
 
-    // MARK: 固定标题栏（标题 + 齿轮，毛玻璃背景）
+    // MARK: 单页
 
-    /// 标题栏固定在顶部。背景是毛玻璃，滚动时内容从它下面穿过。
+    /// 每个栏目一页，自带 ScrollView。
     ///
-    /// 背景透明度跟随滚动偏移：起始位置完全透明，滚动 24pt 后变实。
-    /// 这样一打开看见的是干净的壁纸，滚起来才有「导航栏浮上来」的感觉。
+    /// 顶部留出「标题栏 + 金额」的高度当占位，内容不会一上来就压在它们下面；
+    /// 滚动偏移会上报给外面的金额层，让它同步上移。
+    private func sectionPage(_ item: Section, safeBottom: CGFloat) -> some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                // 标题栏 + 金额占的高度
+                Color.clear.frame(height: headerHeight + heroHeight + 6)
+
+                cardContent(item)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, dockHeight + safeBottom + 32)
+        }
+        .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+            geometry.contentOffset.y + geometry.contentInsets.top
+        } action: { _, value in
+            // 只有当前页的偏移参与计算：滑动过程中相邻页也会上报，
+            // 全收会让金额来回跳。
+            if item == section {
+                scrollOffset = max(0, value)
+            }
+        }
+    }
+
+    /// 金额随滚动上移，移出标题栏后淡出
+    private var heroOpacity: Double {
+        let travelled = Double(scrollOffset)
+        return max(0, 1 - travelled / 120)
+    }
+
+
+
+    // MARK: 固定标题栏（标题 + 齿轮，Liquid Glass 背景）
+
+    /// 标题栏固定在顶部，背景是 iOS 26 的 Liquid Glass。
+    ///
+    /// 和上一版的区别：之前用 `.ultraThinMaterial`（系统模糊材质，只是把
+    /// 后面的内容糊掉），现在用 `.glassEffect` —— 会折射背景、带镜面高光
+    /// 和边缘光，滚上来的内容是"透过一块玻璃"看到的。
+    ///
+    /// 起始位置玻璃完全透明（看见干净壁纸），滚 24pt 内渐变到实心。
     private func headerBar(topPad: CGFloat) -> some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
@@ -212,7 +253,8 @@ struct RootView: View {
         .padding(.bottom, 10)
         .background {
             Rectangle()
-                .fill(.ultraThinMaterial)
+                .fill(.clear)
+                .glassEffect(glassVariant, in: .rect(cornerRadius: 0))
                 .opacity(backgroundOpacity)
                 .ignoresSafeArea(edges: .top)
         }
@@ -226,64 +268,28 @@ struct RootView: View {
     // MARK: 金额
 
     private var hero: some View {
-        Button {
-            showDetail = true
-        } label: {
-            VStack(spacing: 0) {
-                Text("¥\(Money.format(store.result.netPay))")
-                    .font(.system(size: 58, weight: .thin, design: .rounded))
-                    .monospacedDigit()
-                    .minimumScaleFactor(0.6)
-                    .lineLimit(1)
-                    .contentTransition(reduceMotion ? .opacity : .numericText())
-                    .animation(
-                        reduceMotion ? .easeInOut(duration: 0.2) : .snappy,
-                        value: store.result.netPay
-                    )
-                Text("本月实发到手")
-                    .font(.subheadline)
-                    .foregroundStyle(onWallpaperSecondary)
-            }
-            .foregroundStyle(onWallpaper)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 4)
-            .contentShape(Rectangle())
+        VStack(spacing: 0) {
+            Text("¥\(Money.format(store.result.netPay))")
+                .font(.system(size: 58, weight: .thin, design: .rounded))
+                .monospacedDigit()
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
+                .contentTransition(reduceMotion ? .opacity : .numericText())
+                .animation(
+                    reduceMotion ? .easeInOut(duration: 0.2) : .snappy,
+                    value: store.result.netPay
+                )
+            Text("本月实发到手")
+                .font(.subheadline)
+                .foregroundStyle(onWallpaperSecondary)
         }
-        .buttonStyle(.plain)
-        .padding(.bottom, 14)
+        .foregroundStyle(onWallpaper)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 4)
     }
 
-    // MARK: 卡片区（只有这块左右翻页）
-
-    /// 左右翻页的高度必须**稳定**，否则每页高度不同会导致：
-    /// TabView 换 frame → 内容垂直居中 → 短页看起来「更低」，
-    /// 横滑时就是从下面往上冒出来。
-    ///
-    /// 所以取所有页的最大高度当固定 frame，并让每页顶部对齐。
-    private var cardsPagerHeight: CGFloat {
-        pageHeights.values.max() ?? 620
-    }
-
-    private var cardsPager: some View {
-        TabView(selection: $section) {
-            ForEach(Section.allCases) { item in
-                cardContent(item)
-                    .background {
-                        GeometryReader { geo in
-                            Color.clear
-                                .onAppear { pageHeights[item] = geo.size.height }
-                                .onChange(of: geo.size.height) { _, value in
-                                    pageHeights[item] = value
-                                }
-                        }
-                    }
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .tag(item)
-            }
-        }
-        .tabViewStyle(.page(indexDisplayMode: .never))
-        .frame(height: cardsPagerHeight)
-    }
+    // MARK: 卡片内容
 
     @ViewBuilder
     private func cardContent(_ item: Section) -> some View {
