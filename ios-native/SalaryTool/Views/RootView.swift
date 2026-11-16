@@ -1,24 +1,21 @@
 //
 //  RootView.swift
-//  结构照 iOS 天气 App：
 //
 //    ┌──────────────────────────────┐
-//    │ 工资单                    ⚙   │  ┐
-//    │ 上海 · 第 11 月               │  │ 全部在 ScrollView 里，
-//    │        ¥9,692.33             │  │ 上下滚动时一起走
-//    │        本月实发到手            │  ┘
+//    │ 工资单                    ⚙   │  ← 固定，毛玻璃背景
+//    ├──────────────────────────────┤
+//    │        ¥9,692.33             │  ┐
+//    │        本月实发到手            │  │ 跟着卡片一起滚
+//    │   [卡片]                      │  │
+//    │   [卡片]  ← 只有这块左右翻页    │  ┘
 //    │                              │
-//    │   [卡片]  ← 只有这块左右翻页    │
-//    │                              │
-//    │  ◯        • • • • • •      ◯ │  ← 底部工具栏，永远不动
+//    │  ◯        • • • • • •      ◯ │  ← 固定，贴底
 //    └──────────────────────────────┘
 //
-//  两个方向的手势严格分开：
-//  - 上下滚：标题、金额、卡片一起滚（都在同一个 ScrollView 里）
-//  - 左右翻：只有卡片区在翻，标题和金额纹丝不动（它们在 TabView 之外）
-//
-//  卡片区用 TabView + 实测高度：TabView 嵌在 ScrollView 里必须有确定高度，
-//  所以每页用 GeometryReader 量出自身高度，取当前页的那个当 frame。
+//  三个方向的行为严格分开：
+//  - 上下滚：标题不动（毛玻璃浮起），金额和卡片一起滚
+//  - 左右翻：只有卡片区在翻，金额不动（它在 TabView 之外）
+//  - 横滑不跳：五页共用最大高度 + 顶部对齐，见 cardsPager
 //
 
 import SwiftUI
@@ -35,8 +32,14 @@ struct RootView: View {
     @State private var showDetail = false
     @State private var showSectionList = false
 
-    /// 每页卡片的实测高度。TabView 嵌在 ScrollView 里必须有确定高度。
+    /// 每页卡片的实测高度。TabView 嵌在 ScrollView 里必须有确定高度，
+    /// 而且五页共用最大高度，否则横滑时高度跳动。
     @State private var pageHeights: [Section: CGFloat] = [:]
+
+    /// 当前滚动偏移，用来让固定标题的背景渐变浮现
+    @State private var scrollOffset: CGFloat = 0
+    /// 固定标题栏的实测高度，滚动内容顶部要给它让位
+    @State private var headerHeight: CGFloat = 0
 
     private let dockHeight: CGFloat = 52
 
@@ -108,29 +111,44 @@ struct RootView: View {
 
     var body: some View {
         GeometryReader { proxy in
+            let safeTop = proxy.safeAreaInsets.top
             let safeBottom = proxy.safeAreaInsets.bottom
 
-            ZStack(alignment: .bottom) {
+            ZStack(alignment: .top) {
                 WallpaperView()
-                    .ignoresSafeArea()
 
+                // 内容可以滚到状态栏底下（被固定标题的毛玻璃盖住）
                 ScrollView {
                     VStack(spacing: 0) {
-                        headerRow
+                        // 给固定标题让位
+                        Color.clear.frame(height: headerHeight)
                         hero
                         cardsPager
                     }
                     .padding(.horizontal, 16)
                     // 底部留出工具栏 + 安全区，滚到底时最后一张卡完整露出
-                    .padding(.bottom, dockHeight + safeBottom + 40)
+                    .padding(.bottom, dockHeight + safeBottom + 32)
                 }
                 .scrollIndicators(.hidden)
                 .scrollDismissesKeyboard(.interactively)
+                .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                    geometry.contentOffset.y + geometry.contentInsets.top
+                } action: { _, value in
+                    scrollOffset = max(0, value)
+                }
+
+                // 固定标题：上下滚不动，左右翻也不动（在 TabView 之外）
+                headerBar(topPad: safeTop + 4)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { value in
+                        headerHeight = value
+                    }
 
                 bottomBar
+                    .frame(maxHeight: .infinity, alignment: .bottom)
                     .padding(.horizontal, 16)
-                    .padding(.bottom, max(safeBottom, 8) + 2)
+                    .padding(.bottom, safeBottom > 0 ? safeBottom + 2 : 10)
             }
+            .ignoresSafeArea()
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
@@ -156,9 +174,13 @@ struct RootView: View {
         }
     }
 
-    // MARK: 标题行（标题 + 齿轮，左右对齐）
+    // MARK: 固定标题栏（标题 + 齿轮，毛玻璃背景）
 
-    private var headerRow: some View {
+    /// 标题栏固定在顶部。背景是毛玻璃，滚动时内容从它下面穿过。
+    ///
+    /// 背景透明度跟随滚动偏移：起始位置完全透明，滚动 24pt 后变实。
+    /// 这样一打开看见的是干净的壁纸，滚起来才有「导航栏浮上来」的感觉。
+    private func headerBar(topPad: CGFloat) -> some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("工资单")
@@ -185,8 +207,20 @@ struct RootView: View {
             .glassEffect(glassVariant.interactive(), in: .circle)
             .accessibilityLabel("设置")
         }
-        .padding(.top, 8)
-        .padding(.bottom, 4)
+        .padding(.horizontal, 16)
+        .padding(.top, topPad)
+        .padding(.bottom, 10)
+        .background {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .opacity(backgroundOpacity)
+                .ignoresSafeArea(edges: .top)
+        }
+    }
+
+    /// 滚动 24pt 内背景由透明变实
+    private var backgroundOpacity: Double {
+        min(1, Double(scrollOffset) / 24)
     }
 
     // MARK: 金额
@@ -221,12 +255,20 @@ struct RootView: View {
 
     // MARK: 卡片区（只有这块左右翻页）
 
+    /// 左右翻页的高度必须**稳定**，否则每页高度不同会导致：
+    /// TabView 换 frame → 内容垂直居中 → 短页看起来「更低」，
+    /// 横滑时就是从下面往上冒出来。
+    ///
+    /// 所以取所有页的最大高度当固定 frame，并让每页顶部对齐。
+    private var cardsPagerHeight: CGFloat {
+        pageHeights.values.max() ?? 620
+    }
+
     private var cardsPager: some View {
         TabView(selection: $section) {
             ForEach(Section.allCases) { item in
                 cardContent(item)
                     .background {
-                        // 量出每页高度，TabView 才有确定的 frame
                         GeometryReader { geo in
                             Color.clear
                                 .onAppear { pageHeights[item] = geo.size.height }
@@ -235,12 +277,12 @@ struct RootView: View {
                                 }
                         }
                     }
+                    .frame(maxHeight: .infinity, alignment: .top)
                     .tag(item)
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
-        .frame(height: pageHeights[section] ?? 620)
-        .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: pageHeights[section])
+        .frame(height: cardsPagerHeight)
     }
 
     @ViewBuilder
