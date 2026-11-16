@@ -157,8 +157,9 @@ async function main() {
   console.log(`  引擎   WebKit（和 iOS 上同一套排版系统）`);
   console.log(`  地址   ${URL}`);
   console.log("");
-  console.log("  改代码会热更新，关掉窗口即退出。");
-  console.log("  ⚠ 原生能力（分享面板、写沙盒、安全区）仍需真机验证。");
+  console.log("  改代码自动热更新，不用重启。关掉窗口即退出。");
+  console.log("  验证顺序：先在这里把版式调好，攒够一批改动再打包上真机。");
+  console.log("  ⚠ 原生能力（分享面板、写沙盒、真实安全区）只能在真机确认。");
   console.log("");
 
   // 窗口关闭时收尾
