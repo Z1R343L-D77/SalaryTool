@@ -115,6 +115,27 @@ final class AppearanceStore {
         }
     }
 
+    /// 把「跟随系统」解析成实际生效的明暗
+    func effectiveScheme(system scheme: ColorScheme) -> ColorScheme {
+        switch theme {
+        case .system: scheme
+        case .dark: .dark
+        case .light: .light
+        }
+    }
+
+    /// 压在壁纸上的文字（大标题、金额、底部工具栏）该用白字还是深色字。
+    ///
+    /// 规则来自壁纸本身，而不是主题：
+    /// - 富士山是实景照片，两种主题下都保持压暗，白字可读
+    /// - 极光 / 暮色的浅色版本是亮色渐变，白字会糊
+    /// - 无壁纸在浅色下是纯白底，白字等于隐形
+    /// 所以只有「实景照片」或「深色主题」才用白字。
+    func prefersWhiteText(system scheme: ColorScheme) -> Bool {
+        if wallpaper == .fuji { return true }
+        return effectiveScheme(system: scheme) == .dark
+    }
+
     func reset() {
         theme = .system
         fontScale = .standard
@@ -169,12 +190,17 @@ struct WallpaperView: View {
         }
     }
 
-    /// 压暗（或压亮），保证文字可读
+    /// 压暗层，保证文字可读。
+    ///
+    /// 实景照片（富士山）在两种主题下都用深色压暗 —— 白字压在照片上才清楚；
+    /// 渐变壁纸的浅色版本本来就是亮的，改用深色字，靠轻微压暗增强一点层次。
     private var scrim: some View {
-        LinearGradient(
-            colors: scheme == .dark
+        let isPhoto = appearance.wallpaper == .fuji
+        let dark = isPhoto || scheme == .dark
+        return LinearGradient(
+            colors: dark
                 ? [.black.opacity(0.35), .black.opacity(0.62)]
-                : [.white.opacity(0.05), .black.opacity(0.18)],
+                : [.black.opacity(0.02), .black.opacity(0.12)],
             startPoint: .top,
             endPoint: .bottom
         )

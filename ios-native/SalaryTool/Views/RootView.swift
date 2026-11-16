@@ -31,6 +31,7 @@ struct RootView: View {
     @Environment(SalaryStore.self) private var store
     @Environment(AppearanceStore.self) private var appearance
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var systemScheme
     @Environment(\.sectionJump) private var jump
 
     @State private var section: Section = .income
@@ -40,6 +41,25 @@ struct RootView: View {
 
     /// 底部工具栏本体高度（52）加上下留白，用于计算滚动内容的底部余量
     private let dockHeight: CGFloat = 52
+
+    /// 压在壁纸上的文字该用白色还是深色。
+    /// 无壁纸 + 浅色主题时壁纸是白底，白字会看不见 —— 见 AppearanceStore 里的说明。
+    private var onWallpaper: Color {
+        appearance.prefersWhiteText(system: systemScheme) ? .white : .black
+    }
+
+    /// 玻璃材质的厚度。
+    /// 浅色主题下 `.regular` 是一块发白的不透明板，压在白底上很重；
+    /// `.clear` 更通透，配合深色文字反而清楚。
+    private var glassVariant: Glass {
+        systemScheme == .dark ? .regular : .clear
+    }
+
+    private var onWallpaperSecondary: Color {
+        appearance.prefersWhiteText(system: systemScheme)
+            ? Color.white.opacity(0.75)
+            : Color.black.opacity(0.55)
+    }
 
     enum Section: String, CaseIterable, Identifiable, Hashable {
         case income, special, social, ytd, deduction, overtime
@@ -177,10 +197,10 @@ struct RootView: View {
                 Text("工资单")
                     .font(.system(size: 34, weight: .bold))
                     .tracking(-0.6)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(onWallpaper)
                 Text("\(CityRepository.policy(for: store.state.cityId).name) · 第 \(Int(store.state.ytd.monthIndex)) 月")
                     .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.75))
+                    .foregroundStyle(onWallpaperSecondary)
             }
 
             Spacer()
@@ -190,11 +210,12 @@ struct RootView: View {
             } label: {
                 Image(systemName: "gearshape.fill")
                     .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(onWallpaper)
                     .frame(width: 44, height: 44)
-                    .glassEffect(.regular.interactive(), in: .circle)
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
+            .glassEffect(glassVariant.interactive(), in: .circle)
             .accessibilityLabel("设置")
         }
         .padding(.horizontal, 20)
@@ -220,9 +241,9 @@ struct RootView: View {
                     )
                 Text("本月实发到手")
                     .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(onWallpaperSecondary)
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(onWallpaper)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
             .contentShape(Rectangle())
@@ -252,7 +273,7 @@ struct RootView: View {
             pageDots
                 .padding(.horizontal, 12)
                 .frame(height: 52)
-                .glassEffect(.regular, in: .capsule)
+                .glassEffect(glassVariant, in: .capsule)
 
             Spacer(minLength: 16)
 
@@ -263,6 +284,11 @@ struct RootView: View {
         }
     }
 
+    /// 圆形玻璃按钮。
+    ///
+    /// 注意 `.glassEffect` 挂在 Button **外层**：挂在 label 上时，
+    /// 玻璃层会自己接管命中测试，按钮收不到点击（左右两个"失效"就是这个原因）。
+    /// 同时用 `.contentShape(Circle())` 明确命中区域。
     private func glassCircleButton(
         systemName: String,
         label: String,
@@ -271,11 +297,12 @@ struct RootView: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 18, weight: .regular))
-                .foregroundStyle(.white)
+                .foregroundStyle(onWallpaper)
                 .frame(width: 52, height: 52)
-                .glassEffect(.regular.interactive(), in: .circle)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .glassEffect(glassVariant.interactive(), in: .circle)
         .accessibilityLabel(label)
     }
 
@@ -289,7 +316,7 @@ struct RootView: View {
                     }
                 } label: {
                     Capsule()
-                        .fill(section == item ? Color.white : Color.white.opacity(0.45))
+                        .fill(section == item ? onWallpaper : onWallpaper.opacity(0.45))
                         .frame(width: section == item ? 20 : 7, height: 7)
                         .frame(width: 18, height: 44)   // 触摸目标够大，视觉上仍是小圆点
                         .contentShape(Rectangle())
