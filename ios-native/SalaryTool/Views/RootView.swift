@@ -2,20 +2,20 @@
 //  RootView.swift
 //
 //    ┌──────────────────────────────┐
-//    │ 工资单                    ⚙   │  固定，Liquid Glass 通栏
+//    │ 工资单                    ⚙   │  浮动玻璃条（不进状态栏）
 //    ├──────────────────────────────┤
 //    │        ¥9,692.33             │  跟卡片一起上下滚
 //    │   [卡片]  ← 只有这块左右翻页    │
-//    │  ◯        • • • • • •      ◯ │  固定，贴底
+//    │  ◯        • • • • • •      ◯ │  浮动玻璃，贴底
 //    └──────────────────────────────┘
 //
-//  这一版重点修两件事：
-//  1. 玻璃背景是**独立一层**，铺满整条顶栏并延伸到状态栏后面。
-//     之前把它挂在 headerBar 的 .background 上，再叠 ignoresSafeArea，
-//     量出来的高度会把安全区算两遍，玻璃只覆盖到一半屏幕。
-//     —— 你看到的「上面那块灰色横条到此为止」就是这个。
-//  2. TabView 必须显式钉死尺寸。ZStack 里不给尺寸它会缩到内容高度，
-//     .page 再把内容垂直居中 → 卡片落到屏幕中间。
+//  这一版针对两个问题：
+//  1. 顶栏玻璃推进了状态栏，又只有下方圆角 → 看着像个 U 形容器。
+//     改成**浮动的圆角玻璃条**：四角同圆、左右留边距、位置在安全区下方，
+//     完全不碰状态栏。
+//  2. 底部玻璃消失。三个控件的 glassEffect 各自独立，没有放进
+//     GlassEffectContainer —— iOS 26 下分散的玻璃元素会互相干扰，
+//     表现就是有的渲染、有的不渲染。现在统一包进一个容器。
 //
 
 import SwiftUI
@@ -32,14 +32,17 @@ struct RootView: View {
     @State private var showDetail = false
     @State private var showSectionList = false
 
-    /// 当前页的滚动偏移（金额层按它上移）
     @State private var scrollOffset: CGFloat = 0
-    /// 顶栏内容（含安全区）的实测高度。只量内容，不含量背景。
+    /// 顶栏整块（含上下留白）的实测高度
     @State private var headerHeight: CGFloat = 120
 
     private let dockHeight: CGFloat = 52
+    /// 玻璃条的圆角，顶栏和底部统一
+    private let glassRadius: CGFloat = 22
+    /// 浮动的玻璃条左右各留出的边距
+    private let glassInset: CGFloat = 12
 
-    // MARK: 颜色与材质
+    // MARK: 颜色
 
     private var onWallpaper: Color {
         appearance.prefersWhiteText(system: systemScheme) ? .white : .black
@@ -49,22 +52,6 @@ struct RootView: View {
         appearance.prefersWhiteText(system: systemScheme)
             ? Color.white.opacity(0.75)
             : Color.black.opacity(0.55)
-    }
-
-    /// 顶栏玻璃的形状：**上方直角、下方圆角**。
-    ///
-    /// Liquid Glass 的辨识度几乎全在边缘那一圈高光上。整块直角矩形铺满
-    /// 屏幕宽度时，竖边贴在屏幕外、横边在状态栏外，能看见的边只有底边一条，
-    /// 折射和镜面高光全被浪费掉，看上去和普通模糊没区别。
-    /// 下方收 22pt 圆角，底边的光才能顺着弧线跑出来。
-    private var headerShape: UnevenRoundedRectangle {
-        UnevenRoundedRectangle(
-            topLeadingRadius: 0,
-            bottomLeadingRadius: 22,
-            bottomTrailingRadius: 22,
-            topTrailingRadius: 0,
-            style: .continuous
-        )
     }
 
     enum Section: String, CaseIterable, Identifiable, Hashable {
@@ -117,7 +104,7 @@ struct RootView: View {
             ZStack(alignment: .top) {
                 WallpaperView()
 
-                // ① 内容：每页自带 ScrollView，撑满整屏
+                // ① 内容：每页自带 ScrollView，尺寸钉死（否则 .page 会居中）
                 TabView(selection: $section) {
                     ForEach(Section.allCases) { item in
                         sectionPage(
@@ -131,43 +118,25 @@ struct RootView: View {
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                // 必须钉死，否则 .page 会垂直居中内容
                 .frame(width: proxy.size.width, height: proxy.size.height)
 
-                // ② 金额：在 TabView 之外 → 左右翻页不动；
-                //    按滚动偏移上移 → 上下滚时跟着走
+                // ② 金额：在 TabView 之外 → 翻页不动，随纵向上移
                 hero
-                    .padding(.top, headerHeight + 14)
+                    .padding(.top, headerHeight + 6)
                     .offset(y: -scrollOffset)
                     .opacity(heroOpacity)
                     .allowsHitTesting(false)
 
-                // ③ 玻璃背景：独立一层，通栏、覆盖状态栏
-                //
-                // 两个关键点，之前都做错了：
-                // 1. 形状必须带**下圆角**。全屏铺一块直角矩形时，Liquid Glass
-                //    最标志性的边缘高光全部落在屏幕外，剩下的只是一层模糊，
-                //    看起来就是一坨灰 —— 这就是「不是 liquid glass」的原因。
-                //    改成只有底部两个角圆（上方贴着屏幕边），边缘光沿底边
-                //    跑出来，才是 iOS 26 顶栏的样子。
-                // 2. 不能在上面叠纯色。之前 `.overlay { Rectangle().fill(glassTint) }`
-                //    直接把玻璃盖成了实心色块，等于白搭。
-                Color.clear
-                    .frame(maxWidth: .infinity)
-                    .frame(height: headerHeight)
-                    .glassEffect(.regular, in: headerShape)
-                    .allowsHitTesting(false)
-
-                // ④ 顶栏内容（标题 + 齿轮）
-                headerContent(topPad: topPad)
+                // ③ 浮动玻璃顶栏（在安全区下方，不进状态栏）
+                headerBlock(topPad: topPad)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { value in
                         headerHeight = value
                     }
 
                 bottomBar
                     .frame(maxHeight: .infinity, alignment: .bottom)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, safeBottom > 0 ? safeBottom + 2 : 10)
+                    .padding(.horizontal, glassInset)
+                    .padding(.bottom, max(safeBottom, 10) + 2)
             }
             .ignoresSafeArea()
         }
@@ -197,7 +166,7 @@ struct RootView: View {
 
     // MARK: 单页
 
-    /// 每页一个 ScrollView。顶部放**隐藏的真实视图**当占位，
+    /// 每页一个 ScrollView。顶部放隐藏的真实视图当占位，
     /// 高度天然和浮动层一致，不需要任何测量相加。
     private func sectionPage(
         _ item: Section,
@@ -208,19 +177,17 @@ struct RootView: View {
     ) -> some View {
         ScrollView {
             VStack(spacing: 0) {
-                headerContent(topPad: topPad).hidden()
+                headerBlock(topPad: topPad).hidden()
                 hero.hidden()
 
                 cardContent(item)
                     .padding(.top, 6)
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, dockHeight + safeBottom + 32)
+            .padding(.bottom, dockHeight + safeBottom + 40)
         }
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
-        // 内容从屏幕最顶端开始（被玻璃顶栏盖住），别再叠一次安全区
-        .contentMargins(.top, 0, for: .scrollContent)
         .onScrollGeometryChange(for: CGFloat.self) { geometry in
             max(0, geometry.contentOffset.y + geometry.contentInsets.top)
         } action: { _, value in
@@ -244,36 +211,42 @@ struct RootView: View {
         .padding(.bottom, 4)
     }
 
-    /// 金额随滚动上移并淡出
     private var heroOpacity: Double {
         max(0, 1 - Double(scrollOffset) / 120)
     }
 
-    // MARK: 顶栏内容
+    // MARK: 顶栏（浮动玻璃条）
 
-    /// 标题 + 齿轮。**不含背景** —— 背景是 ZStack 里的独立一层，
-    /// 这样这里量出来的高度不会和安全区互相干扰。
-    private func headerContent(topPad: CGFloat) -> some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
+    /// 顶栏整块：玻璃条 + 上下留白。外层只负责定位，玻璃形状在 headerBar 里。
+    private func headerBlock(topPad: CGFloat) -> some View {
+        headerBar
+            .padding(.horizontal, glassInset)
+            .padding(.top, topPad)
+            .padding(.bottom, 8)
+    }
+
+    /// 浮动玻璃条本身：四角同圆、左右留边距，完全在状态栏下方。
+    private var headerBar: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text("工资单")
-                    .font(.system(size: 34, weight: .bold))
-                    .tracking(-0.6)
+                    .font(.system(size: 30, weight: .bold))
+                    .tracking(-0.5)
                     .foregroundStyle(onWallpaper)
                 Text(verbatim: "\(CityRepository.policy(for: store.state.cityId).name) · 第 \(Int(store.state.ytd.monthIndex)) 月")
-                    .font(.subheadline)
+                    .font(.footnote)
                     .foregroundStyle(onWallpaperSecondary)
             }
 
-            Spacer(minLength: 12)
+            Spacer(minLength: 8)
 
             Button {
                 showSettings = true
             } label: {
                 Image(systemName: "gearshape.fill")
-                    .font(.system(size: 17, weight: .medium))
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(onWallpaper)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 40, height: 40)
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
@@ -281,8 +254,8 @@ struct RootView: View {
             .accessibilityLabel("设置")
         }
         .padding(.horizontal, 16)
-        .padding(.top, topPad)
-        .padding(.bottom, 6)
+        .padding(.vertical, 10)
+        .glassEffect(.regular, in: .rect(cornerRadius: glassRadius))
     }
 
     // MARK: 金额
@@ -290,7 +263,7 @@ struct RootView: View {
     private var hero: some View {
         VStack(spacing: 0) {
             Text("¥\(Money.format(store.result.netPay))")
-                .font(.system(size: 58, weight: .thin, design: .rounded))
+                .font(.system(size: 56, weight: .thin, design: .rounded))
                 .monospacedDigit()
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
@@ -300,35 +273,40 @@ struct RootView: View {
                     value: store.result.netPay
                 )
             Text("本月实发到手")
-                .font(.subheadline)
+                .font(.footnote)
                 .foregroundStyle(onWallpaperSecondary)
         }
         .foregroundStyle(onWallpaper)
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 16)
-        .padding(.vertical, 4)
-        .padding(.bottom, 8)
+        .padding(.top, 8)
+        .padding(.bottom, 10)
     }
 
     // MARK: 底部工具栏
 
+    /// 三个控件放进同一个 GlassEffectContainer。
+    /// 分散的玻璃元素在 iOS 26 下会互相干扰（有的渲染、有的不渲染），
+    /// 包进容器才能真正合成为一组玻璃。
     private var bottomBar: some View {
-        HStack(spacing: 0) {
-            glassCircleButton(systemName: "list.bullet.rectangle", label: "明细") {
-                showDetail = true
-            }
+        GlassEffectContainer(spacing: 12) {
+            HStack(spacing: 0) {
+                glassCircleButton(systemName: "list.bullet.rectangle", label: "明细") {
+                    showDetail = true
+                }
 
-            Spacer(minLength: 16)
+                Spacer(minLength: 8)
 
-            pageDots
-                .padding(.horizontal, 12)
-                .frame(height: 52)
-                .glassEffect(.regular, in: .capsule)
+                pageDots
+                    .padding(.horizontal, 12)
+                    .frame(height: 52)
+                    .glassEffect(.regular, in: .rect(cornerRadius: 26))
 
-            Spacer(minLength: 16)
+                Spacer(minLength: 8)
 
-            glassCircleButton(systemName: "square.grid.2x2", label: "栏目列表") {
-                showSectionList = true
+                glassCircleButton(systemName: "square.grid.2x2", label: "栏目列表") {
+                    showSectionList = true
+                }
             }
         }
     }
