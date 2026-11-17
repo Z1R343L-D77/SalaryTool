@@ -9,13 +9,12 @@
 //    │  ◯        • • • • • •      ◯ │  浮动玻璃，贴底
 //    └──────────────────────────────┘
 //
-//  这一版针对两个问题：
-//  1. 顶栏玻璃推进了状态栏，又只有下方圆角 → 看着像个 U 形容器。
-//     改成**浮动的圆角玻璃条**：四角同圆、左右留边距、位置在安全区下方，
-//     完全不碰状态栏。
-//  2. 底部是**三个独立的玻璃**，各自悬浮，不套外框。
-//     iOS 26 禁止玻璃嵌套，外层会把内层渲染成实心块。
-//     左右圆形贴屏幕两侧（各留 16pt），中间胶囊居中。
+//  底部玻璃「透不下去」的关键：内容必须能滚到工具栏**下面**。
+//  对应两处设置：
+//  - 外层 GeometryReader 加 .ignoresSafeArea()，TabView 才有整屏高度
+//  - 每页 ScrollView 底部只留 safeBottom + 8，不留工具栏高度
+//  否则最后一张卡被顶在工具栏上方，玻璃背后只剩纯黑壁纸，
+//  采样不到内容，看起来就是不透明。
 //
 
 import SwiftUI
@@ -105,21 +104,18 @@ struct RootView: View {
             ZStack(alignment: .top) {
                 WallpaperView()
 
-                // ① 内容：每页自带 ScrollView，尺寸钉死（否则 .page 会居中）
+                // ① 内容：每页自带 ScrollView，尺寸 = 整屏
                 TabView(selection: $section) {
                     ForEach(Section.allCases) { item in
                         sectionPage(
                             item,
                             topPad: topPad,
-                            safeBottom: safeBottom,
-                            width: proxy.size.width,
-                            height: proxy.size.height
+                            safeBottom: safeBottom
                         )
                         .tag(item)
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(width: proxy.size.width, height: proxy.size.height)
 
                 // ② 金额：在 TabView 之外 → 翻页不动，随纵向上移
                 hero
@@ -141,6 +137,10 @@ struct RootView: View {
             }
             .ignoresSafeArea()
         }
+        // ★ GeometryReader 本身也要忽略安全区，否则 proxy.size 是「去掉
+        //   状态栏和 Home 条」的高度，TabView 按它设尺寸就会在底部被裁掉
+        //   一截 —— 卡片滚不到工具栏底下，玻璃背后没有内容可采样。
+        .ignoresSafeArea()
         .sheet(isPresented: $showSettings) {
             SettingsView()
                 .preferredColorScheme(appearance.preferredScheme)
@@ -169,12 +169,13 @@ struct RootView: View {
 
     /// 每页一个 ScrollView。顶部放隐藏的真实视图当占位，
     /// 高度天然和浮动层一致，不需要任何测量相加。
+    ///
+    /// ScrollView 一直铺到屏幕最底（含 Home 指示条区域），内容自然就能
+    /// 滚到工具栏下面 —— 这是底部玻璃「透得下去」的前提。
     private func sectionPage(
         _ item: Section,
         topPad: CGFloat,
-        safeBottom: CGFloat,
-        width: CGFloat,
-        height: CGFloat
+        safeBottom: CGFloat
     ) -> some View {
         ScrollView {
             VStack(spacing: 0) {
@@ -185,7 +186,10 @@ struct RootView: View {
                     .padding(.top, 6)
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, safeBottom + 24)
+            // 底部留白 = Home 指示条 + 一点余量。
+            // 不能把工具栏高度算进来，否则最后一张卡被顶在工具栏上方，
+            // 玻璃背后只剩纯黑壁纸，看起来就是不透明。
+            .padding(.bottom, safeBottom + 8)
         }
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
@@ -194,7 +198,7 @@ struct RootView: View {
         } action: { _, value in
             if item == section { scrollOffset = value }
         }
-        .frame(width: width, height: height, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     @ViewBuilder
