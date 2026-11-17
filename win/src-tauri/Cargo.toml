@@ -1,6 +1,6 @@
 [package]
 name = "salarytool"
-version = "0.3.20261116"
+version = "0.2.0"
 description = "当月薪水到手计算器"
 authors = ["you"]
 edition = "2024"
