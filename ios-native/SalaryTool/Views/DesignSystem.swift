@@ -206,7 +206,8 @@ struct AmountField: View {
 /// ÷100 存回，而且小数位要允许 4 位（社保比例有时精确到万分位）。
 struct PercentField: View {
     @Binding var value: Double
-    var max: Double = 1
+    /// 允许的最大比例（0.24 表示 24%）
+    var upperBound: Double = 1
 
     @State private var text: String = ""
     @FocusState private var focused: Bool
@@ -259,7 +260,7 @@ struct PercentField: View {
     private func commit() {
         let cleaned = text.replacingOccurrences(of: "%", with: "")
         let parsed = Double(cleaned) ?? (value * 100)
-        let clamped = min(max * 100, max(0, parsed))
+        let clamped = Swift.min(upperBound * 100, Swift.max(0, parsed))
         value = Money.round(clamped / 100, digits: 6)
         text = display
     }

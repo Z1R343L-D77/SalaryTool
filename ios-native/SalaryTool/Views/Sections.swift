@@ -228,13 +228,13 @@ struct SocialSectionView: View {
 
                 InsetPanel(cornerRadius: 18) {
                     VStack(spacing: 0) {
-                        rateRow("养老保险", \.pensionRate, max: 0.30)
+                        rateRow("养老保险", \.pensionRate, upperBound: 0.30)
                         Divider().opacity(0.4)
-                        rateRow("医疗保险", \.medicalRate, max: 0.30)
+                        rateRow("医疗保险", \.medicalRate, upperBound: 0.30)
                         Divider().opacity(0.4)
-                        rateRow("失业保险", \.unemploymentRate, max: 0.10)
+                        rateRow("失业保险", \.unemploymentRate, upperBound: 0.10)
                         Divider().opacity(0.4)
-                        rateRow("住房公积金", \.housingFundRate, max: 0.24)
+                        rateRow("住房公积金", \.housingFundRate, upperBound: 0.24)
                         Divider().opacity(0.4)
 
                         // 大额医疗互助：部分城市（如北京）固定每月几元
@@ -303,7 +303,7 @@ struct SocialSectionView: View {
     private func rateRow(
         _ label: String,
         _ key: WritableKeyPath<SocialConfig, Double>,
-        max: Double
+        upperBound: Double
     ) -> some View {
         HStack {
             Text(label)
@@ -316,7 +316,7 @@ struct SocialSectionView: View {
                     get: { store.state.social[keyPath: key] },
                     set: { store.state.social[keyPath: key] = $0 }
                 ),
-                max: max
+                upperBound: upperBound
             )
             .frame(width: 96)
         }
