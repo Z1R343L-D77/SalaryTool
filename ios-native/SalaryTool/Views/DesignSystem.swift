@@ -198,6 +198,73 @@ struct AmountField: View {
     }
 }
 
+// MARK: - 百分比输入
+
+/// 百分比输入框。内部值是小数字（0.08），界面显示 8 %。
+///
+/// 和 AmountField 分开，是因为换算方式不同：这里要 ×100 显示、
+/// ÷100 存回，而且小数位要允许 4 位（社保比例有时精确到万分位）。
+struct PercentField: View {
+    @Binding var value: Double
+    var max: Double = 1
+
+    @State private var text: String = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        HStack(spacing: 4) {
+            TextField("0", text: $text)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .font(.system(.body, design: .rounded).weight(.medium))
+                .monospacedDigit()
+                .focused($focused)
+                .onAppear { text = display }
+                .onChange(of: value) { _, _ in
+                    if !focused { text = display }
+                }
+                .onChange(of: focused) { _, isFocused in
+                    if isFocused { text = plain } else { commit() }
+                }
+
+            Text("%")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 38)
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(.primary.opacity(focused ? 0.09 : 0.055))
+        }
+        .overlay {
+            if focused {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Color.accentColor.opacity(0.55), lineWidth: 1.5)
+            }
+        }
+    }
+
+    private var display: String {
+        let percent = Money.round(value * 100, digits: 4)
+        return percent == percent.rounded()
+            ? String(Int(percent))
+            : String(format: "%.4f", percent)
+                .replacingOccurrences(of: "0+$", with: "", options: .regularExpression)
+                .replacingOccurrences(of: "\\.$", with: "", options: .regularExpression)
+    }
+
+    private var plain: String { display }
+
+    private func commit() {
+        let cleaned = text.replacingOccurrences(of: "%", with: "")
+        let parsed = Double(cleaned) ?? (value * 100)
+        let clamped = min(max * 100, max(0, parsed))
+        value = Money.round(clamped / 100, digits: 6)
+        text = display
+    }
+}
+
 // MARK: - 命名输入
 
 struct LabelField: View {

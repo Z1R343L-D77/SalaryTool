@@ -228,13 +228,36 @@ struct SocialSectionView: View {
 
                 InsetPanel(cornerRadius: 18) {
                     VStack(spacing: 0) {
-                        rateRow("养老保险", \.pensionRate)
+                        rateRow("养老保险", \.pensionRate, max: 0.30)
                         Divider().opacity(0.4)
-                        rateRow("医疗保险", \.medicalRate)
+                        rateRow("医疗保险", \.medicalRate, max: 0.30)
                         Divider().opacity(0.4)
-                        rateRow("失业保险", \.unemploymentRate)
+                        rateRow("失业保险", \.unemploymentRate, max: 0.10)
                         Divider().opacity(0.4)
-                        rateRow("住房公积金", \.housingFundRate)
+                        rateRow("住房公积金", \.housingFundRate, max: 0.24)
+                        Divider().opacity(0.4)
+
+                        // 大额医疗互助：部分城市（如北京）固定每月几元
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("大额医疗互助")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Text("固定金额，多数城市为 0")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            Spacer(minLength: 12)
+                            AmountField(
+                                value: Binding(
+                                    get: { store.state.social.medicalExtra },
+                                    set: { store.state.social.medicalExtra = $0 }
+                                ),
+                                suffix: "元"
+                            )
+                            .frame(width: 110)
+                        }
+                        .padding(.vertical, 8)
                     }
                 }
 
@@ -279,18 +302,25 @@ struct SocialSectionView: View {
 
     private func rateRow(
         _ label: String,
-        _ key: WritableKeyPath<SocialConfig, Double>
+        _ key: WritableKeyPath<SocialConfig, Double>,
+        max: Double
     ) -> some View {
         HStack {
             Text(label)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Spacer()
-            Text(Money.formatRate(store.state.social[keyPath: key]))
-                .font(.subheadline.weight(.medium))
-                .monospacedDigit()
+            Spacer(minLength: 12)
+            // 比例可编辑：各城市每年调整，写死等于失效
+            PercentField(
+                value: Binding(
+                    get: { store.state.social[keyPath: key] },
+                    set: { store.state.social[keyPath: key] = $0 }
+                ),
+                max: max
+            )
+            .frame(width: 96)
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
     }
 }
 
@@ -348,6 +378,31 @@ struct YtdSectionView: View {
                                 )
                             )
                             .frame(width: 150)
+                        }
+
+                        // 「本单位」口径需要知道在本单位干到第几个月，
+                        // 用来算 5000 × 几个月。只能在 1...当月数 之间选。
+                        if store.state.ytd.basicDeductionMode == .employedMonth {
+                            Divider().opacity(0.4)
+
+                            HStack {
+                                Text("在本单位第几个月")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Picker("本单位月数", selection: Binding(
+                                    get: {
+                                        Int(store.state.ytd.employedMonthIndex
+                                            ?? store.state.ytd.monthIndex)
+                                    },
+                                    set: { store.state.ytd.employedMonthIndex = Double($0) }
+                                )) {
+                                    let cap = max(1, Int(store.state.ytd.monthIndex))
+                                    ForEach(1...cap, id: \.self) { Text("\($0) 个月").tag($0) }
+                                }
+                                .pickerStyle(.menu)
+                                .tint(.primary)
+                            }
                         }
                     }
                 }
@@ -454,14 +509,31 @@ struct YtdSectionView: View {
                 HStack {
                     MonthPicker(month: record.month)
                     Spacer()
+
+                    // ⟳ 用当前计算结果回填这一行（对账时最常用）
+                    Button {
+                        fillFromResult(record.wrappedValue.id)
+                    } label: {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.accentColor)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("用当前计算结果填入这一行")
+
                     Button {
                         store.removeMonth(id: record.wrappedValue.id)
                     } label: {
                         Image(systemName: "trash")
                             .font(.system(size: 13))
                             .foregroundStyle(.secondary)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("删除这条记录")
                 }
 
                 AmountField(value: record.taxableIncome)
@@ -470,6 +542,17 @@ struct YtdSectionView: View {
                 AmountField(value: record.taxPaid)
             }
         }
+    }
+
+    /// 用当前计算结果填这一行：
+    /// 计税收入 / 社保公积金 / 专项附加 / 本月个税
+    private func fillFromResult(_ id: String) {
+        guard let index = store.state.months.firstIndex(where: { $0.id == id }) else { return }
+        let r = store.result
+        store.state.months[index].taxableIncome = Money.round2(r.taxableIncome)
+        store.state.months[index].socialDeduction = Money.round2(r.social.total)
+        store.state.months[index].specialDeduction = Money.round2(store.state.special.total)
+        store.state.months[index].taxPaid = Money.round2(r.taxThisMonth)
     }
 
     private var bonusBlock: some View {

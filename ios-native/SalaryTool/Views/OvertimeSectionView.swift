@@ -23,6 +23,15 @@ struct OvertimeSectionView: View {
     private var totalPay: Double { OvertimeMath.totalPay(overtime) }
     private var isCalendar: Bool { overtime.entryMode == "calendar" }
 
+    /// 「跟随基本工资」时用的金额。
+    /// 优先取名称包含「基本工资」的收入项，否则退回第一个计入社保基数的项。
+    private var basicSalary: Double {
+        if let item = store.state.incomes.first(where: { $0.label.contains("基本工资") }) {
+            return item.amount
+        }
+        return store.state.incomes.first(where: { $0.includeInSocialBase })?.amount ?? 0
+    }
+
     private var resolvedHours: (workday: Double, rest: Double, holiday: Double) {
         OvertimeMath.resolveHours(overtime)
     }
@@ -62,6 +71,117 @@ struct OvertimeSectionView: View {
                 }
 
                 totalBlock
+                syncBlock
+                rulesBlock
+            }
+        }
+        // 跟随基本工资：收入项里"基本工资"一改，基数跟着走
+        .onChange(of: basicSalary) { _, newValue in
+            guard overtime.mode == .monthly, overtime.followBasicSalary else { return }
+            store.state.overtime.base = newValue
+            store.state.overtime.hourlyRate = OvertimeMath.monthlyToHourly(
+                base: newValue,
+                monthlyDays: store.state.overtime.monthlyDays,
+                dailyHours: store.state.overtime.dailyHours
+            )
+        }
+    }
+
+    // MARK: 同步到收入项（+ 清零工时）
+
+    private var syncBlock: some View {
+        InsetPanel(cornerRadius: 16) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    ToggleChip(
+                        title: "同步到收入项",
+                        isOn: Binding(
+                            get: { store.state.overtimeSync.enabled },
+                            set: { store.setOvertimeSyncEnabled($0) }
+                        )
+                    )
+
+                    Spacer(minLength: 8)
+
+                    // 清零工时：只清当前录入方式，另一边的数据保留
+                    Button("清零工时") {
+                        store.resetOvertimeHours()
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .buttonStyle(.plain)
+                }
+
+                if store.state.overtimeSync.enabled, let bound = store.findOvertimeIncome() {
+                    HStack(spacing: 6) {
+                        Text("已写入「\(bound.label)」")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(Money.format(bound.amount) + " 元")
+                            .font(.caption.weight(.medium))
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                        Spacer()
+                    }
+                } else if !store.state.overtimeSync.enabled {
+                    Text("关闭时只计算，不改动工资单")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+    }
+
+    // MARK: 计薪规则（折叠）
+
+    private var rulesBlock: some View {
+        InsetPanel(cornerRadius: 16) {
+            VStack(alignment: .leading, spacing: 10) {
+                DisclosureGroup {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("月计薪天数")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            AmountField(
+                                value: Binding(
+                                    get: { store.state.overtime.monthlyDays },
+                                    set: { store.state.overtime.monthlyDays = $0 }
+                                ),
+                                suffix: "天",
+                                precision: 2
+                            )
+                            .frame(width: 110)
+                        }
+
+                        HStack {
+                            Text("每日标准工时")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            AmountField(
+                                value: Binding(
+                                    get: { store.state.overtime.dailyHours },
+                                    set: { store.state.overtime.dailyHours = $0 }
+                                ),
+                                suffix: "小时",
+                                precision: 1
+                            )
+                            .frame(width: 110)
+                        }
+
+                        Text("法定 21.75 天 = (365 − 104) ÷ 12，一般不需要改。")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.top, 8)
+                } label: {
+                    Text("计薪规则")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                .tint(.secondary)
             }
         }
     }
@@ -92,6 +212,8 @@ struct OvertimeSectionView: View {
                                     dailyHours: store.state.overtime.dailyHours,
                                     currentBase: store.state.overtime.base
                                 )
+                                // 手填就不再跟随，否则下次基本工资变动会盖掉
+                                store.state.overtime.followBasicSalary = false
                             } else {
                                 // 改月薪 → 时薪跟着反算
                                 store.state.overtime.base = newValue
@@ -100,6 +222,7 @@ struct OvertimeSectionView: View {
                                     monthlyDays: store.state.overtime.monthlyDays,
                                     dailyHours: store.state.overtime.dailyHours
                                 )
+                                store.state.overtime.followBasicSalary = false
                             }
                         }
                     ),
@@ -110,6 +233,39 @@ struct OvertimeSectionView: View {
                 Text("折算小时工资 \(Money.formatPrecise(hourlyBase)) 元/小时")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                // 跟随基本工资：只在月薪模式有意义。
+                // 勾上后 base 取「基本工资」收入项，收入项一改就跟着动。
+                if overtime.mode == .monthly {
+                    HStack(spacing: 10) {
+                        ToggleChip(
+                            title: "跟随基本工资",
+                            isOn: Binding(
+                                get: { store.state.overtime.followBasicSalary },
+                                set: { newValue in
+                                    store.state.overtime.followBasicSalary = newValue
+                                    if newValue {
+                                        store.state.overtime.base = basicSalary
+                                        store.state.overtime.hourlyRate =
+                                            OvertimeMath.monthlyToHourly(
+                                                base: basicSalary,
+                                                monthlyDays: store.state.overtime.monthlyDays,
+                                                dailyHours: store.state.overtime.dailyHours
+                                            )
+                                    }
+                                }
+                            )
+                        )
+
+                        if store.state.overtime.followBasicSalary {
+                            Text(Money.format(basicSalary) + " 元")
+                                .font(.caption)
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
             }
         }
     }

@@ -16,7 +16,11 @@ final class SalaryStore {
     // MARK: 状态
 
     var state: SalaryState {
-        didSet { scheduleSave() }
+        didSet {
+            scheduleSave()
+            // 工时 / 基数一变，联动金额跟着重算
+            applyOvertimeToIncome()
+        }
     }
 
     /// 最近一次算出的结果（派生值，不持久化）
@@ -179,6 +183,96 @@ final class SalaryStore {
 
     func removeMonth(id: String) {
         state.months.removeAll { $0.id == id }
+    }
+
+    // MARK: - 加班费 ↔ 收入项联动
+
+    /// 防止「写回收入项 → 触发 didSet → 再写一次」的递归
+    private var syncingOvertime = false
+
+    /// 加班费要写入的收入项；没绑定或绑定项被删时返回 nil。
+    ///
+    /// 只认名称**完全等于**「加班费」。不用模糊匹配，因为
+    /// 加班补贴 / 加班补助是公司另发的固定钱，算出来的是按工时×倍率，
+    /// 混在一起会把账算错。
+    func findOvertimeIncome() -> IncomeItem? {
+        if let id = state.overtimeSync.incomeId,
+           let item = state.incomes.first(where: { $0.id == id }) {
+            return item
+        }
+        return state.incomes.first { $0.label.trimmingCharacters(in: .whitespaces) == "加班费" }
+    }
+
+    /// 确保有一个可写入的「加班费」收入项：先按 id 找，再按名字找，都没有就新建。
+    @discardableResult
+    func ensureOvertimeIncome() -> IncomeItem {
+        if let existing = findOvertimeIncome() {
+            state.overtimeSync.incomeId = existing.id
+            return existing
+        }
+        let item = IncomeItem(
+            label: "加班费",
+            amount: 0,
+            // 加班费一般不并进社保 / 公积金基数，但要计税
+            includeInSocialBase: false,
+            includeInHousingFundBase: false,
+            taxable: true
+        )
+        state.incomes.append(item)
+        state.overtimeSync.incomeId = item.id
+        return item
+    }
+
+    /// 打开 / 关闭联动。
+    /// 关闭时把金额清零，避免留下一个和工时对不上的陈旧数字。
+    func setOvertimeSyncEnabled(_ enabled: Bool) {
+        state.overtimeSync.enabled = enabled
+        if enabled {
+            ensureOvertimeIncome()
+            applyOvertimeToIncome()
+        } else if let target = findOvertimeIncome(),
+                  let index = state.incomes.firstIndex(where: { $0.id == target.id }) {
+            syncingOvertime = true
+            state.incomes[index].amount = 0
+            syncingOvertime = false
+        }
+    }
+
+    /// 把算出的加班费合计写进目标收入项。
+    ///
+    /// 全程持有 `syncingOvertime`：这个函数自己也会改 `state`，
+    /// 而 `state` 的 didSet 又会调回来，不挡住就是无限递归。
+    private func applyOvertimeToIncome() {
+        guard !syncingOvertime, state.overtimeSync.enabled else { return }
+        syncingOvertime = true
+        defer { syncingOvertime = false }
+
+        let total = Money.round2(OvertimeMath.totalPay(state.overtime))
+
+        // 绑定项被删了就重建一个
+        if findOvertimeIncome() == nil {
+            ensureOvertimeIncome()
+        }
+        guard let target = findOvertimeIncome(),
+              let index = state.incomes.firstIndex(where: { $0.id == target.id }) else {
+            return
+        }
+        if state.incomes[index].amount != total {
+            state.incomes[index].amount = total
+        }
+    }
+
+    /// 清零工时：只清当前正在用的录入方式，另一边的数据保留。
+    func resetOvertimeHours() {
+        if state.overtime.entryMode == "calendar" {
+            var calendar = state.overtime.calendar ?? .empty()
+            calendar.hours = [:]
+            state.overtime.calendar = calendar
+        } else {
+            state.overtime.weekdayHours = 0
+            state.overtime.weekendHours = 0
+            state.overtime.holidayHours = 0
+        }
     }
 
     /// 日历改了之后，三档合计跟着更新。
