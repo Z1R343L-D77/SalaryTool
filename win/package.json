@@ -1,7 +1,7 @@
 {
   "name": "salarytool",
   "private": true,
-  "version": "0.3.20261116",
+  "version": "0.3.20261117",
   "type": "module",
   "scripts": {
     "dev": "vite",
