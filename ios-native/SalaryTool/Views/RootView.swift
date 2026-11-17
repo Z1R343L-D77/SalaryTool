@@ -51,9 +51,20 @@ struct RootView: View {
             : Color.black.opacity(0.55)
     }
 
-    /// 玻璃上的额外着色：深色壁纸 + 深色玻璃会糊成一片，叠一层黑把边界立住
-    private var glassTint: Color {
-        systemScheme == .dark ? .black.opacity(0.14) : .black.opacity(0.03)
+    /// 顶栏玻璃的形状：**上方直角、下方圆角**。
+    ///
+    /// Liquid Glass 的辨识度几乎全在边缘那一圈高光上。整块直角矩形铺满
+    /// 屏幕宽度时，竖边贴在屏幕外、横边在状态栏外，能看见的边只有底边一条，
+    /// 折射和镜面高光全被浪费掉，看上去和普通模糊没区别。
+    /// 下方收 22pt 圆角，底边的光才能顺着弧线跑出来。
+    private var headerShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: 0,
+            bottomLeadingRadius: 22,
+            bottomTrailingRadius: 22,
+            topTrailingRadius: 0,
+            style: .continuous
+        )
     }
 
     enum Section: String, CaseIterable, Identifiable, Hashable {
@@ -126,18 +137,25 @@ struct RootView: View {
                 // ② 金额：在 TabView 之外 → 左右翻页不动；
                 //    按滚动偏移上移 → 上下滚时跟着走
                 hero
-                    .padding(.top, headerHeight + 2)
+                    .padding(.top, headerHeight + 14)
                     .offset(y: -scrollOffset)
                     .opacity(heroOpacity)
                     .allowsHitTesting(false)
 
                 // ③ 玻璃背景：独立一层，通栏、覆盖状态栏
-                Rectangle()
-                    .fill(.clear)
-                    .glassEffect(.regular, in: .rect(cornerRadius: 0))
-                    .overlay { Rectangle().fill(glassTint) }
+                //
+                // 两个关键点，之前都做错了：
+                // 1. 形状必须带**下圆角**。全屏铺一块直角矩形时，Liquid Glass
+                //    最标志性的边缘高光全部落在屏幕外，剩下的只是一层模糊，
+                //    看起来就是一坨灰 —— 这就是「不是 liquid glass」的原因。
+                //    改成只有底部两个角圆（上方贴着屏幕边），边缘光沿底边
+                //    跑出来，才是 iOS 26 顶栏的样子。
+                // 2. 不能在上面叠纯色。之前 `.overlay { Rectangle().fill(glassTint) }`
+                //    直接把玻璃盖成了实心色块，等于白搭。
+                Color.clear
                     .frame(maxWidth: .infinity)
                     .frame(height: headerHeight)
+                    .glassEffect(.regular, in: headerShape)
                     .allowsHitTesting(false)
 
                 // ④ 顶栏内容（标题 + 齿轮）
@@ -264,7 +282,7 @@ struct RootView: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, topPad)
-        .padding(.bottom, 10)
+        .padding(.bottom, 6)
     }
 
     // MARK: 金额
