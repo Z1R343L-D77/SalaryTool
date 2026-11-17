@@ -126,14 +126,11 @@ final class AppearanceStore {
 
     /// 压在壁纸上的文字（大标题、金额、底部工具栏）该用白字还是深色字。
     ///
-    /// 规则来自壁纸本身，而不是主题：
-    /// - 富士山是实景照片，两种主题下都保持压暗，白字可读
-    /// - 极光 / 暮色的浅色版本是亮色渐变，白字会糊
-    /// - 无壁纸在浅色下是纯白底，白字等于隐形
-    /// 所以只有「实景照片」或「深色主题」才用白字。
+    /// **只看主题，不看壁纸类型**。之前特判了「实景照片永远用白字」，
+    /// 结果浅色模式下照片仍然被压成深色，界面一半浅一半深，
+    /// 底部那块壁纸是纯黑的 —— 玻璃背后没有东西可采样，自然也是黑的。
     func prefersWhiteText(system scheme: ColorScheme) -> Bool {
-        if wallpaper == .fuji { return true }
-        return effectiveScheme(system: scheme) == .dark
+        effectiveScheme(system: scheme) == .dark
     }
 
     func reset() {
@@ -163,9 +160,13 @@ struct WallpaperView: View {
     private var content: some View {
         switch appearance.wallpaper {
         case .fuji:
+            // 浅色主题下把照片提亮 + 褪色，否则底部一大片纯黑，
+            // 压在上面的玻璃采样不到任何颜色，看起来就是个黑洞。
             Image("wallpaper")
                 .resizable()
                 .scaledToFill()
+                .saturation(scheme == .dark ? 1 : 0.4)
+                .brightness(scheme == .dark ? 0 : 0.36)
                 .overlay(scrim)
         case .aurora:
             LinearGradient(
@@ -190,17 +191,16 @@ struct WallpaperView: View {
         }
     }
 
-    /// 压暗层，保证文字可读。
+    /// 覆盖层：深色往下压，浅色往上提。
     ///
-    /// 实景照片（富士山）在两种主题下都用深色压暗 —— 白字压在照片上才清楚；
-    /// 渐变壁纸的浅色版本本来就是亮的，改用深色字，靠轻微压暗增强一点层次。
+    /// 之前实景照片在两种主题下都用黑色压暗，所以浅色模式里壁纸仍然很黑，
+    /// 压在底部的玻璃采样到黑色 → 玻璃也是黑的，看起来像消失了。
+    /// 现在浅色模式改成白色蒙版，壁纸整体发亮，玻璃才有亮色可折射。
     private var scrim: some View {
-        let isPhoto = appearance.wallpaper == .fuji
-        let dark = isPhoto || scheme == .dark
-        return LinearGradient(
-            colors: dark
-                ? [.black.opacity(0.35), .black.opacity(0.62)]
-                : [.black.opacity(0.02), .black.opacity(0.12)],
+        LinearGradient(
+            colors: scheme == .dark
+                ? [.black.opacity(0.32), .black.opacity(0.58)]
+                : [.white.opacity(0.45), .white.opacity(0.58)],
             startPoint: .top,
             endPoint: .bottom
         )
