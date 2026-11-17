@@ -13,9 +13,9 @@
 //  1. 顶栏玻璃推进了状态栏，又只有下方圆角 → 看着像个 U 形容器。
 //     改成**浮动的圆角玻璃条**：四角同圆、左右留边距、位置在安全区下方，
 //     完全不碰状态栏。
-//  2. 底部玻璃和顶栏不是同一个构造。顶栏是「一大块玻璃条 + 内嵌圆钮」，
-//     底部却是三个散落的玻璃。现在照抄顶栏结构：外面一块玻璃条，
-//     三个控件嵌在里面，各自再有一层小玻璃。
+//  2. 底部是**三个独立的玻璃**，各自悬浮，不套外框。
+//     iOS 26 禁止玻璃嵌套，外层会把内层渲染成实心块。
+//     左右圆形贴屏幕两侧（各留 16pt），中间胶囊居中。
 //
 
 import SwiftUI
@@ -36,6 +36,7 @@ struct RootView: View {
     /// 顶栏整块（含上下留白）的实测高度
     @State private var headerHeight: CGFloat = 120
 
+    /// 底部工具栏本体高度（仅用于确认内容能滚到它下方）
     private let dockHeight: CGFloat = 52
     /// 玻璃条的圆角，顶栏和底部统一
     private let glassRadius: CGFloat = 22
@@ -184,7 +185,7 @@ struct RootView: View {
                     .padding(.top, 6)
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, dockHeight + safeBottom + 40)
+            .padding(.bottom, safeBottom + 24)
         }
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
@@ -285,29 +286,33 @@ struct RootView: View {
 
     // MARK: 底部工具栏
 
-    /// 结构与顶栏**完全一致**：一块大玻璃条 + 里面嵌小玻璃控件。
+    /// 三个**独立**的玻璃控件，各自悬浮在内容上方。
     ///
-    /// 之前底部是三个散落的玻璃（还套了 GlassEffectContainer），
-    /// 和顶栏「一大块 + 内嵌圆钮」的构造不一样，观感自然也不同。
-    /// 顶栏既然没问题，就直接照抄它的结构。
+    /// 不套外框：iOS 26 明确禁止玻璃嵌套（glass on glass），
+    /// 外层会把内层当普通内容渲染成实心块 —— 这就是之前底部
+    /// 看起来是一整条黑条、而不是玻璃的原因。
+    ///
+    /// 布局照天气 App：左右两个圆形**贴到屏幕两侧**（各自留 16pt），
+    /// 中间胶囊居中。用 Spacer 撑开，不是固定间距。
     private var bottomBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 0) {
             glassCircleButton(systemName: "list.bullet.rectangle", label: "明细") {
                 showDetail = true
             }
 
+            Spacer(minLength: 12)
+
             pageDots
-                .padding(.horizontal, 12)
-                .frame(height: 44)
-                .glassEffect(.regular, in: .rect(cornerRadius: 22))
+                .padding(.horizontal, 14)
+                .frame(height: 52)
+                .glassEffect(.regular, in: .rect(cornerRadius: 26))
+
+            Spacer(minLength: 12)
 
             glassCircleButton(systemName: "square.grid.2x2", label: "栏目列表") {
                 showSectionList = true
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .glassEffect(.regular, in: .rect(cornerRadius: glassRadius))
     }
 
     /// `.glassEffect` 必须挂在 Button 外层，挂在 label 上会吞掉点击
