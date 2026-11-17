@@ -1,65 +1,152 @@
 # 当月薪水到手计算器
 
-基于 Tauri 2 + Vue 3 + TypeScript 的薪水计算器。输入基本工资、各类补贴和五险一金参数，按「累计预扣预缴」算出当月实发到手金额。
+<p align="center">
+  <picture>
+    <img src="docs/screenshots/win-income.jpg" alt="Windows 桌面版" width="100%">
+  </picture>
+</p>
 
-> 计算逻辑全部在 `shared/` 里，是纯函数并有单元测试；两套外壳只负责界面和平台差异。
+<p align="center">
+  <a href="#下载"><img src="https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6?style=flat-square" alt="Windows"></a>
+  <a href="#ios-构建"><img src="https://img.shields.io/badge/platform-iOS%2026%2B-black?style=flat-square" alt="iOS"></a>
+  <a href="#许可证"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License"></a>
+  <img src="https://img.shields.io/badge/tests-109%20passed-brightgreen?style=flat-square" alt="Tests">
+</p>
 
-## 仓库结构
+<p align="center">
+  把工资条上那些看不懂的数字，拆成能自己算清的一笔一笔。
+</p>
 
-这个仓库里有**同一个应用的两套外壳**，共用一份计算逻辑：
+---
 
-```text
-shared/                 计算与数据模型（两套外壳共用，纯 TS，无 UI 依赖）
-├── taxTables.ts        个税税率表（年度 / 月度）
-├── cityPolicies.ts     各城市社保公积金默认参数
-├── calculator.ts       五险一金、累计预扣个税、到手计算
-├── defaults.ts         默认状态、预设、状态 → 计算输入
-├── history.ts          按月记录与累计值累加
-├── overtime.ts         加班费折算（月薪 ↔ 时薪、日历汇总）
-├── calendar.ts         加班日历与节假日识别
-├── money.ts            金额取整与格式化
-├── storage.ts          持久化、配置导入与字段校验
-├── settings.ts         外观设置模型
-└── *.test.ts           单元测试（109 项）
+## 这是什么
 
-fixtures/
-└── my-salary.json      示例配置，供测试读取
+一个离线的工资计算器。填进去基本工资、各类补贴、五险一金参数，
+按国家税务总局的「累计预扣预缴」规则，算出这个月实际到手多少。
 
-win/                    Windows 桌面版
-├── src/                Vue 界面（三列布局、透明玻璃窗口）
-├── src-tauri/          Tauri Rust 侧（导出走「另存为」对话框）
-├── scripts/            start.bat 的实际逻辑
-└── configs/            可直接导入的配置示例
+和网上那些工资计算器不一样的地方，是它允许你把**每一个口径**都改掉：
 
-ios-native/            iPhone 版（SwiftUI 原生，iOS 26+）
-├── SalaryTool/Models/  数据模型与计算核心（与 shared/ 一一对照）
-├── SalaryTool/State/   @Observable 状态、持久化、外观设置
-├── SalaryTool/Views/   天气 App 式布局：大标题 + 居中金额 + 翻页 + 玻璃工具栏
-├── SalaryToolTests/    单元测试（用例与 TS 版一致）
-└── project.yml         XcodeGen 工程定义
-```
+- 社保按上年月平均工资、公积金只按基本工资？两个基数可以分开设。
+- 餐补计税但不计入社保基数？每个收入项独立开关。
+- 年中才申报了子女教育扣除？按月记录工资条，累计值准确还原。
+- 年中换过工作，减除费用怎么算？两种口径可以切换。
 
-`shared/` 通过 Vite 别名 `@shared` 引用，Windows 版直接用；iOS 原生版用 Swift
-重写了一份同样的算法（`Models/Calculator.swift`），靠共同测试用例保证结果一致。
+算完会给出逐项明细：养老交了多少、医疗交了多少、这个月的税是怎么推出来的。
 
-**为什么 iOS 不走 WebView**：iOS 26 的 Liquid Glass 是系统在 GPU 上实时算的
-分层模糊 + 边缘折射，只有原生视图能拿到（`.glassEffect()`）。WebView 的
-`backdrop-filter` 只能做单层高斯模糊，做不出那种「真的是一块玻璃」的质感。
+## 两份实现
+
+这个仓库里是**同一个应用的两个版本**，共用一套计算口径：
+
+| | Windows 桌面版 | iPhone 版 |
+| --- | --- | --- |
+| 技术栈 | Tauri 2 · Vue 3 · TypeScript | SwiftUI（原生） |
+| 版本 | `0.2.0` | `0.3.20261117` |
+| 特点 | 三列布局，一次看全所有参数 | 天气 App 式布局，玻璃质感 |
+| 计算逻辑 | `shared/`（TS） | `Models/Calculator.swift`（Swift 重写） |
+
+两边的数据格式完全一致，导出的 JSON 可以互相导入。
+
+**为什么要写两份**：Windows 版跑在 WebView 里，改一行就热更新，很快。
+但 iOS 26 的 Liquid Glass 是系统在 GPU 上实时算的分层模糊加边缘折射，
+只有原生视图拿得到（`.glassEffect()`）。WebView 的 `backdrop-filter`
+只能做单层高斯模糊，做不出那种「真的隔着一块玻璃」的质感。
+
+计算逻辑在两份实现里各写一遍，靠同一批测试用例保证结果一致 ——
+`shared/*.test.ts` 和 `SalaryToolTests.swift` 里是同样的场景和同样的期望值。
 
 ## 下载
 
-- **Windows**：到 [Releases](https://github.com/Z1R343L-D77/SalaryTool/releases) 下载 `SalaryTool-x.y.z.exe`，双击即开，免安装。
-- **iPhone**：见下方 [iOS 构建](#ios-构建)，需要自己签名安装。
+**Windows** — 到 [Releases](https://github.com/Z1R343L-D77/SalaryTool/releases)
+下载 `SalaryTool-0.2.0.exe`，双击即开，单文件免安装。
+
+**iPhone** — 见 [iOS 构建](#ios-构建)。只能自己签名安装，免费账号 7 天续签一次。
+
+## 功能
+
+### 薪水计算
+
+**收入项** — 每一项独立控制三件事：
+
+| 开关 | 作用 |
+| --- | --- |
+| 社保 | 是否计入社保缴费基数 |
+| 公积金 | 是否计入公积金缴费基数（可与社保不同） |
+| 计税 | 是否计入应纳税所得额 |
+
+基本工资一般三个都勾；餐补、交通补贴只勾「计税」；报销类一个都不勾。
+
+**社保 / 公积金** — 两个基数各自独立，可以都选自动，也可以一个自动一个手填。
+自动模式下取「勾了对应开关的收入项合计」，再按当地上下限 clamp。
+养老、医疗、失业、公积金四个比例，加上大额医疗互助固定额，全部可改。
+
+**累计数据** — 这是个税计算准确与否的关键。两种填法：
+
+*手填* —— 直接抄工资条上的「截至上月累计收入 / 累计社保 / 累计专项附加 / 累计已缴税」。
+
+*按月记录* —— 每个月记一条，累计值自动加出来。适合中途才申报专项附加扣除、
+或者某几个月收入不同的情况。
+
+**减除费用口径** — 两种，按国家税务总局 2020 年第 13 号公告：
+
+| 口径 | 谁用 | 例子 |
+| --- | --- | --- |
+| 当年月份数 | 当年首次取得工资薪金 | 10 月发薪 → 扣 5000 × 10 = 50,000 |
+| 本单位月数 | 年内已有过工资收入（换工作） | 10 月发薪但在本单位第 4 月 → 扣 20,000 |
+
+这也是应届生入职当年常常一分税都不缴的原因。减除费用从当年 1 月起算，
+年收入不到 6 万时累计应纳税所得额始终是负的。**没有「应届生免税」这个政策**，
+是这条规则在起作用。
+
+**年终奖** — 单独计税（奖金 ÷ 12 查月度税率表）或并入综合所得，跟着税率跳档走。
+
+### 加班费计算器
+
+<p align="center">
+  <img src="docs/screenshots/win-calendar.jpg" alt="加班日历" width="100%">
+</p>
+
+| 项目 | 倍率 | 依据 |
+| --- | --- | --- |
+| 工作日 | 1.5 倍 | 延长工时 |
+| 休息日 | 2 倍 | 可用补休替代 |
+| 法定节假日 | 3 倍 | 不能用补休替代 |
+
+基数两种填法，**永远双向同步**：填月薪算时薪，填时薪反算月薪。来回切换模式不会
+覆盖你手填的值。小时工资保留四位小数——这是折算出来的中间值，留两位误差会被工时放大：
+`6700 ÷ 174 = 38.5057`，截成 `38.51` 后乘 1.5 是 `57.77`，实际应该是 `57.7586`。
+
+工时可以填合计，也可以在日历上逐天填。日历会自动识别日期固定的法定节假日
+（元旦、劳动节、国庆），农历节日每年日期不同，点日期右上角的标签手动标。
+
+同步方向是**日历 → 合计**，单向。日历是按天记的真实工时，拿模糊的合计反推
+只能靠猜，一旦写回就把记录毁了。两边不一致时界面会说明当前以哪边为准。
+
+打开「同步到收入项」后，算出的加班费会实时写进指定的收入项，
+工资合计、社保基数、个税跟着重算。
+
+## 计算口径
+
+```text
+累计应纳税所得额 = 累计收入
+                 − 5000 × 月数
+                 − 累计社保公积金
+                 − 累计专项附加扣除
+                 − 累计其他税前扣除
+
+本月应预扣 = 按年度税率表算出的累计税额 − 截至上月已预缴税额
+```
+
+年度税率表七级（3% / 10% / 20% / 25% / 30% / 35% / 45%），从累计应纳税所得额
+查级距和速算扣除数。年终奖单独计税时改用月度换算表（奖金 ÷ 12 的商查表）。
 
 ## Windows 开发
 
 ```bash
 cd win
 npm install
-npm run dev          # 浏览器里调试（仅界面）
-npm run tauri dev    # 桌面窗口，带热更新
+npm run dev          # 浏览器里调试界面
+npm run tauri dev    # 桌面窗口，热更新
 npm test             # 运行共享的计算逻辑单测
-npm run typecheck
 npm run tauri build  # 打包
 ```
 
@@ -70,25 +157,24 @@ npm run tauri build  # 打包
 | 依赖 | 说明 |
 | --- | --- |
 | Node.js 20+ | 前端构建 |
-| Rust (stable) | `rustup` 安装，含 `x86_64-pc-windows-msvc` target |
+| Rust (stable) | `rustup`，含 `x86_64-pc-windows-msvc` target |
 | Visual Studio Build Tools | 勾选「使用 C++ 的桌面开发」 |
-| WebView2 Runtime | Win11 自带；Win10 需要安装 |
+| WebView2 Runtime | Win11 自带；Win10 需要装 |
 
 ## iOS 构建
 
-**iOS 只能在 macOS 上编译** —— 这是 Xcode 的授权限制，没有任何 Windows 移植方案。
+iOS 只能在 macOS 上编译 —— Xcode 的授权限制，没有 Windows 移植方案。
 所以走 GitHub Actions 的 macOS runner：Windows 上写代码、push、云端编译、下载 `.ipa`。
 
-### 流程
+```bash
+# 1. 在 GitHub Actions 页面手动触发 Build iOS (Native)
+# 2. 从 Artifacts 下载 SalaryTool-native-ipa
+# 3. 用 Sideloadly 签名安装（Windows 上就能做）
+```
 
-1. **云端编译**：在 GitHub Actions 页面手动触发 `Build iOS (Native)`。
-2. **下载产物**：从 Artifacts 里下载 `SalaryTool-native-ipa`。
-3. **自签安装**（Windows）：
-   - 用 [Sideloadly](https://sideloadly.io/) 把 `.ipa` 拖进去，填 Apple ID 签名，插线装到 iPhone。
-   - 免费 Apple ID 签的 App **每 7 天过期**，重跑一次 Sideloadly 即可续签（数据保留）。
-4. **首次运行**：到 iPhone 的「设置 → 通用 → VPN 与设备管理」里信任你的开发者证书。
+免费 Apple ID 签的 App 每 7 天过期，重跑一次 Sideloadly 即可续签，数据不丢。
 
-### 本地开发（需要 macOS）
+本地开发需要 macOS：
 
 ```bash
 brew install xcodegen
@@ -96,111 +182,64 @@ cd ios-native && xcodegen generate
 open SalaryToolNative.xcodeproj
 ```
 
-### 数据存储
+## 数据
 
-iOS 版和 Windows 版存的是同一种 JSON，可以互相导入导出：
+只存本机，不联网，不上传。
 
-- **Windows**：`localStorage`，桌面 WebView 不会随便清。
-- **iOS**：App 文档目录下的 `salarytool-state.json`，原子写（临时文件 + rename）。
-  配合 Info.plist 里的 `UIFileSharingEnabled`，导出的备份会出现在
-  「文件 → 我的 iPhone → SalaryTool」里。
-
-## 计算口径
-
-- **收入**：每个收入项单独标记「计入社保基数」「计入公积金基数」「计税」。两者分开是因为不少公司申报口径不同（社保按上年月平均工资，公积金只按基本工资）。
-  - 基本工资：社保 + 公积金 + 计税
-  - 补贴、餐补、全勤、加班：一般只计税，不计入任何基数
-  - 报销类：两者都不计入
-- **社保公积金**：社保基数和公积金基数**各自独立**，可分别选「按收入自动推算」或「手动填写」，各受当地上下限约束。
-- **累计数据**两种来源：
-  - 手填：直接填截至上月的累计收入 / 社保公积金 / 专项附加 / 已缴税额
-  - 按月记录：逐月记录工资条上的实际数字，累计值自动加出来。中途才申报专项附加扣除、或某几个月收入不同，都能准确还原。
-- **个税**：累计预扣预缴
-
-  ```text
-  累计应纳税所得额 = 累计收入 − 5000 × 月数 − 累计社保公积金 − 累计专项附加扣除 − 累计其他税前扣除
-  本月应预扣 = 按年度税率表算出的累计税额 − 截至上月已预缴税额
-  ```
-
-  「月数」有两种口径，在「累计数据」页面切换（国家税务总局 2020 年第 13 号公告）：
-
-  | 口径 | 适用场景 | 例子 |
-  | --- | --- | --- |
-  | **当年月份数**（默认） | 当年首次取得工资薪金 | 10 月发薪 → 扣 5000 × 10 = 50,000 |
-  | **本单位月数** | 年内已有过工资收入（换工作） | 10 月发薪但在本单位第 4 月 → 扣 20,000 |
-
-  这就是应届生入职当年常常一分个税都不缴的原因：减除费用从当年 1 月起算，
-  年收入不到 6 万时累计应纳税所得额始终为负。**没有「应届生免税」这个政策**，
-  是这条减除费用规则在起作用。
-
-- **年终奖**：可选「单独计税」（奖金 ÷ 12 查月度税率表）或「并入综合所得」。
-- **配置导入**：粘贴 JSON 或选择 `.json` 文件。示例见 [win/configs/](win/configs/)。
-
-## 加班费计算器
-
-侧边栏「加班费」有独立的加班费计算器，与薪水计算互不影响：
-
-| 项目 | 倍率 | 说明 |
+| 平台 | 位置 | 备份方式 |
 | --- | --- | --- |
-| 工作日 | 1.5 倍 | 延长工时 |
-| 周末 | 2 倍 | 休息日加班，可用补休替代 |
-| 节假日 | 3 倍 | 法定节假日，不能用补休替代 |
+| Windows | `localStorage` | 顶栏「导出」走系统另存为对话框 |
+| iOS | App 文档目录 `salarytool-state.json` | 设置 → 数据 → 导出备份 |
 
-基数支持两种填法，**两边永远同步**：
+iOS 那边配合 `UIFileSharingEnabled`，导出的文件会出现在
+「文件 → 我的 iPhone → SalaryTool」，插数据线或走 iCloud 都能取走。
 
-- **按月薪折算**：小时工资 = 月薪 ÷ 21.75 ÷ 8（《劳动法》第 44 条口径）。默认跟随基本工资。
-- **直接填时薪**：小时工资直接作为 1 倍基数，适合按小时签约的兼职 / 外包。
+两块都用原子写（临时文件 + rename），中途崩溃不会留下半个文件。
 
-改月薪时薪立刻重算，改时薪月薪立刻反算，来回切换模式不会覆盖手填的值。
-手填任一边会自动取消「跟随基本工资」，否则下次基本工资变动会盖掉。
+## 目录
 
-小时工资保留四位小数。这是折算出来的中间值，只留两位误差会被工时放大：
-`6700 ÷ 174 = 38.5057`，截成 `38.51` 后乘 1.5 是 `57.77`，实际应该是 `57.7586`。
+```text
+shared/                 计算与数据模型（Windows 版直接用）
+├── taxTables.ts        个税税率表（年度 / 月度）
+├── cityPolicies.ts     各城市社保公积金默认参数
+├── calculator.ts       五险一金、累计预扣个税、到手计算
+├── history.ts          按月记录与累计值累加
+├── overtime.ts         加班费折算
+├── calendar.ts         加班日历与节假日识别
+├── storage.ts          持久化、导入与字段校验
+└── *.test.ts           109 项单元测试
 
-### 工时录入：合计 / 日历
+win/                    Windows 桌面版
+├── src/                Vue 界面
+├── src-tauri/          Tauri Rust 侧
+└── start.bat           一键启动
 
-同步方向是**日历 → 合计**，只往一个方向走：
+ios-native/             iPhone 版
+├── SalaryTool/Models/  计算核心（与 shared/ 一一对照）
+├── SalaryTool/State/   @Observable 状态与持久化
+├── SalaryTool/Views/   天气 App 式界面
+├── SalaryToolTests/    同批测试用例的 Swift 版
+└── project.yml         XcodeGen 工程定义
 
-- 日历里改了任何一天，三档合计立刻跟着更新
-- 反过来不动日历。日历是按天记的实际工时，拿模糊的合计反推只能靠猜
-- 两边不一致时界面会说明当前以哪一边为准
-
-日历支持 2025–2045 年。每天右上角的小标签显示当前档位（班 / 休 / 假），点一下可以循环切换。
-
-## 外观设置
-
-Windows 版侧边栏左下角点齿轮，iOS 版点右上角齿轮：
-
-| 设置 | 选项 |
-| --- | --- |
-| 主题 | 跟随系统 / 深色 / 浅色 |
-| 字号 | 小 / 标准 / 大 / 特大 |
-| 壁纸 | 富士山 / 极光 / 暮色 / 无壁纸 |
-| 降低透明效果 | 关掉 `backdrop-filter`，低配机器更流畅 |
-
-设置存在 `salarytool.settings.v1`，和工资数据分开 —— 导出 JSON 时不会带上外观偏好。
-
-## 字体
-
-两款可变字体随包内嵌在 `src/assets/fonts/`（Windows 版），不依赖系统字体：
-
-| 字体 | 用途 | 体积 |
-| --- | --- | --- |
-| Inter | 拉丁字母与数字 | 80 KB |
-| Noto Sans SC | 中文（GB2312 一级字库） | 990 KB |
-
-内嵌不是为了好看，是**稳定**：微软雅黑在 11–12px 下勾边发虚，且没有 500/600 字重，
-浏览器只能拿 400 去合成粗体，中文笔画会糊。两款都是可变字体，用多少字重都是真字重。
-
-iOS 版优先用系统的 SF Pro + 苹方 —— 那是 Apple 自己的高质量可变字体，比内嵌的 Inter 更贴合系统。
+docs/screenshots/       README 用的截图
+```
 
 ## 注意事项
 
-- 各城市社保基数上下限和比例是**示例默认值**，每年 7 月各地会调整，请以当地人社局公布为准。
-- 数据只存在本机，不上传。Windows 存在 `localStorage`，iOS 存在 App 沙盒。
+- 各城市社保基数上下限和比例是**示例默认值**，每年 7 月各地会调整，
+  请以当地人社局公布为准。界面上所有数字都能改。
 - 大病医疗等按年度汇算的扣除项，按月计算时一般不填。
-- `win/src-tauri/.cargo/config.toml` 把 crates.io 指向了 rsproxy 镜像（国内直连约 40 KB/s）。
+- 计算结果仅供估算，以实际工资条为准。
+
+## 使用到的开源项目
+
+| | |
+| --- | --- |
+| [Tauri](https://tauri.app/) | 桌面外壳 |
+| [Vue 3](https://vuejs.org/) | Windows 界面 |
+| [Inter](https://rsms.me/inter/) · [Noto Sans SC](https://fonts.google.com/noto/specimen/Noto+Sans+SC) | 内嵌字体，SIL OFL 1.1 |
+| [XcodeGen](https://github.com/yonaskolb/XcodeGen) | iOS 工程生成 |
 
 ## 许可证
 
-MIT。内嵌字体为 SIL Open Font License 1.1，许可证在 `win/src/assets/fonts/` 下。
+[MIT](LICENSE)
