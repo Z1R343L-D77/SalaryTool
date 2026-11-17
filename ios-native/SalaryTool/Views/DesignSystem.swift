@@ -14,40 +14,43 @@ import SwiftUI
 
 /// 内容卡。
 ///
-/// 用 `.ultraThinMaterial` 而不是 `.regularMaterial`：天气 App 的卡片
-/// 能看见云在后面流动，regular 太实了。ultraThin 仍是系统语义材质，
-/// 会响应「降低透明度」「增强对比度」，不像手搓的 rgba 那样在无障碍
-/// 设置下失效。
+/// 用 `.glassEffect` 而不是 `.regularMaterial`。
+///
+/// 材质（Material）是「在颜色上叠一层模糊」，本身带相当高的白/黑底色，
+/// 浅色模式下几乎是不透明的浅灰 —— 壁纸完全被盖住。
+/// 玻璃（glassEffect）是采样背后内容再折射，底子更薄，壁纸能透上来。
+///
+/// 顶栏和底部用的就是 glassEffect，卡片换成同一种材质后
+/// 整个界面才是同一个层的观感。
 struct GlassCard<Content: View>: View {
     var cornerRadius: CGFloat = 22
     @ViewBuilder var content: Content
-
-    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         content
             .padding(18)
             .background {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    // 深色下用很薄的材质（能看见云在动）；
-                    // 浅色下背景本身就是白的，ultraThin 会和底色糊成一片，
-                    // 换 regular 才有足够的层次。
-                    .fill(scheme == .dark ? .ultraThinMaterial : .regularMaterial)
+                    .fill(.clear)
+                    .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
             }
     }
 }
 
-/// 卡片里的小块：比外层亮一档的填充，不透明、不模糊
+/// 卡片里的小块：比卡片再亮一档的填充。
+/// 用很低的透明度，不挡住下面已经透上来的壁纸。
 struct InsetPanel<Content: View>: View {
     var cornerRadius: CGFloat = 18
     @ViewBuilder var content: Content
+
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         content
             .padding(12)
             .background {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(.primary.opacity(0.055))
+                    .fill(.primary.opacity(scheme == .dark ? 0.055 : 0.045))
             }
     }
 }
