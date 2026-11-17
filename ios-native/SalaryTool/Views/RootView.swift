@@ -135,12 +135,11 @@ struct RootView: View {
                     .padding(.horizontal, glassInset)
                     .padding(.bottom, max(safeBottom, 10) + 2)
             }
+            // 只有 ZStack 这一层扩展到安全区外（壁纸铺满、内容能滚到
+            // 状态栏和 Home 条底下），GeometryReader 本身不忽略 ——
+            // 否则 proxy.safeAreaInsets 会全是 0，顶栏会顶到灵动岛里。
             .ignoresSafeArea()
         }
-        // ★ GeometryReader 本身也要忽略安全区，否则 proxy.size 是「去掉
-        //   状态栏和 Home 条」的高度，TabView 按它设尺寸就会在底部被裁掉
-        //   一截 —— 卡片滚不到工具栏底下，玻璃背后没有内容可采样。
-        .ignoresSafeArea()
         .sheet(isPresented: $showSettings) {
             SettingsView()
                 .preferredColorScheme(appearance.preferredScheme)
