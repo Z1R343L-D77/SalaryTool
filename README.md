@@ -1,9 +1,7 @@
 # 当月薪水到手计算器
 
 <p align="center">
-  <picture>
-    <img src="docs/screenshots/win-income.jpg" alt="Windows 桌面版" width="100%">
-  </picture>
+  <img src="docs/screenshots/win-income.jpg" alt="Windows 桌面版" width="76%">
 </p>
 
 <p align="center">
@@ -15,6 +13,15 @@
 
 <p align="center">
   把工资条上那些看不懂的数字，拆成能自己算清的一笔一笔。
+</p>
+
+<br>
+
+<p align="center">
+  <img src="docs/screenshots/ios-overview.jpg" alt="iPhone 版：收入项 / 明细 / 栏目 / 加班日历" width="100%">
+</p>
+<p align="center">
+  <sub>iPhone 版 — 左起：收入项 · 本月明细 · 栏目切换 · 加班日历</sub>
 </p>
 
 ---
@@ -102,7 +109,7 @@
 ### 加班费计算器
 
 <p align="center">
-  <img src="docs/screenshots/win-calendar.jpg" alt="加班日历" width="100%">
+  <img src="docs/screenshots/win-overtime.jpg" alt="Windows 加班费计算器" width="100%">
 </p>
 
 | 项目 | 倍率 | 依据 |
