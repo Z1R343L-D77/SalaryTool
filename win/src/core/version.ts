@@ -6,7 +6,7 @@
  */
 import { isTauri } from "./platform";
 
-const FALLBACK_VERSION = "0.2.0";
+const FALLBACK_VERSION = "0.3.20261120";
 
 let cached: string | null = null;
 

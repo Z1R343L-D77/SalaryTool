@@ -8,7 +8,7 @@
   <a href="#下载"><img src="https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6?style=flat-square" alt="Windows"></a>
   <a href="#ios-构建"><img src="https://img.shields.io/badge/platform-iOS%2026%2B-black?style=flat-square" alt="iOS"></a>
   <a href="#许可证"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License"></a>
-  <img src="https://img.shields.io/badge/tests-109%20passed-brightgreen?style=flat-square" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-128%20passed-brightgreen?style=flat-square" alt="Tests">
 </p>
 
 <p align="center">
@@ -47,7 +47,7 @@
 | | Windows 桌面版 | iPhone 版 |
 | --- | --- | --- |
 | 技术栈 | Tauri 2 · Vue 3 · TypeScript | SwiftUI（原生） |
-| 版本 | `0.2.0` | `0.3.20261117` |
+| 版本 | `0.3.20261120` | `0.3.20261117` |
 | 特点 | 三列布局，一次看全所有参数 | 天气 App 式布局，玻璃质感 |
 | 计算逻辑 | `shared/`（TS） | `Models/Calculator.swift`（Swift 重写） |
 
@@ -64,7 +64,7 @@
 ## 下载
 
 **Windows** — 到 [Releases](https://github.com/Z1R343L-D77/SalaryTool/releases)
-下载 `SalaryTool-0.2.0.exe`，双击即开，单文件免安装。
+下载 `SalaryTool-0.3.20261120.exe`，双击即开，单文件免安装。
 
 **iPhone** — 见 [iOS 构建](#ios-构建)。只能自己签名安装，免费账号 7 天续签一次。
 
@@ -130,6 +130,35 @@
 
 打开「同步到收入项」后，算出的加班费会实时写进指定的收入项，
 工资合计、社保基数、个税跟着重算。
+
+### 加班误餐补贴
+
+<div align="center">
+  <img src="docs/screenshots/win-meal.jpg" alt="加班误餐补贴" width="100%">
+</div>
+
+和加班费是两条独立的线：加班费按「工时 × 倍率」算，受劳动法约束；
+误餐补贴按「天数 × 餐次 × 单价」算，纯粹看公司制度。所以这里没有基数、没有倍率，
+只有一张单价表和一台按天记录的小日历。
+
+| 场景 | 早 | 中 | 晚 |
+| --- | --- | --- | --- |
+| 工作日加班 | — | — | 20 |
+| 周末 / 法定节假日 | — | 40 | 20 |
+| 出差 | 20 | 40 | 40 |
+
+上面是默认值，**九个数都能改**。改单价后，所有已记录的餐次立刻按新价重算。
+
+**出差是独立标记**。某天标了「出」，当天整套换成出差单价，不再看是周几。
+所以「周三出差」和「周六出差」拿一样的补贴。
+
+两种录入方式：
+
+- **直接填餐次** —— 三档 × 三餐的表格，填数字就行
+- **按日历填写** —— 每格三枚「早/中/晚」按钮，加一个「出」标记
+
+日历模式下有个「按加班记录补餐次」：加班日历里记了工时的那几天，
+一键勾上默认餐次（工作日给晚饭、周末给午饭和晚饭），已经填过的不动。
 
 ## 计算口径
 
@@ -212,9 +241,10 @@ shared/                 计算与数据模型（Windows 版直接用）
 ├── calculator.ts       五险一金、累计预扣个税、到手计算
 ├── history.ts          按月记录与累计值累加
 ├── overtime.ts         加班费折算
+├── mealAllowance.ts    误餐补贴（天数 × 餐次 × 单价）
 ├── calendar.ts         加班日历与节假日识别
 ├── storage.ts          持久化、导入与字段校验
-└── *.test.ts           109 项单元测试
+└── *.test.ts           128 项单元测试
 
 win/                    Windows 桌面版
 ├── src/                Vue 界面
