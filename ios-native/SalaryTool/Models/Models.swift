@@ -259,6 +259,208 @@ struct OvertimeSyncSettings: Codable, Hashable {
     static let initial = OvertimeSyncSettings(enabled: false, incomeId: nil)
 }
 
+// MARK: - 误餐补贴
+
+/// 一顿饭。早 / 中 / 晚。
+enum MealSlot: String, Codable, CaseIterable {
+    case breakfast, lunch, dinner
+
+    var label: String {
+        switch self {
+        case .breakfast: "早"
+        case .lunch: "中"
+        case .dinner: "晚"
+        }
+    }
+}
+
+/// 发生误餐的场景，决定用哪套单价。
+///
+/// 出差独立于日期类型：标了出差就整套换成出差单价，不再看当天是周几。
+enum MealScene: String, Codable, CaseIterable {
+    case workday, weekend, trip
+
+    var label: String {
+        switch self {
+        case .workday: "工作日加班"
+        case .weekend: "周末 / 节假日"
+        case .trip: "出差"
+        }
+    }
+}
+
+/// 一天能领几餐。用 Double 与输入框的绑定类型保持一致。
+struct MealCounts: Codable, Hashable {
+    var breakfast: Double
+    var lunch: Double
+    var dinner: Double
+
+    static let zero = MealCounts(breakfast: 0, lunch: 0, dinner: 0)
+
+    var total: Double { breakfast + lunch + dinner }
+
+    subscript(slot: MealSlot) -> Double {
+        get {
+            switch slot {
+            case .breakfast: breakfast
+            case .lunch: lunch
+            case .dinner: dinner
+            }
+        }
+        set {
+            switch slot {
+            case .breakfast: breakfast = newValue
+            case .lunch: lunch = newValue
+            case .dinner: dinner = newValue
+            }
+        }
+    }
+
+    /// 餐次乘以单价。
+    func amount(with rates: MealCounts) -> Double {
+        Money.round2(
+            Money.nonNegative(breakfast) * Money.nonNegative(rates.breakfast)
+                + Money.nonNegative(lunch) * Money.nonNegative(rates.lunch)
+                + Money.nonNegative(dinner) * Money.nonNegative(rates.dinner)
+        )
+    }
+
+    init(breakfast: Double, lunch: Double, dinner: Double) {
+        self.breakfast = breakfast
+        self.lunch = lunch
+        self.dinner = dinner
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        breakfast = Money.round2(Money.nonNegative((try? c.decode(Double.self, forKey: .breakfast)) ?? 0))
+        lunch = Money.round2(Money.nonNegative((try? c.decode(Double.self, forKey: .lunch)) ?? 0))
+        dinner = Money.round2(Money.nonNegative((try? c.decode(Double.self, forKey: .dinner)) ?? 0))
+    }
+}
+
+/// 三档的单价。
+struct MealRates: Codable, Hashable {
+    var workday: MealCounts
+    var weekend: MealCounts
+    var trip: MealCounts
+
+    /// 默认单价：工作日只有晚饭 20；周末午饭 40 晚饭 20；出差 20 / 40 / 40。
+    static let initial = MealRates(
+        workday: MealCounts(breakfast: 0, lunch: 0, dinner: 20),
+        weekend: MealCounts(breakfast: 0, lunch: 40, dinner: 20),
+        trip: MealCounts(breakfast: 20, lunch: 40, dinner: 40)
+    )
+
+    subscript(scene: MealScene) -> MealCounts {
+        get {
+            switch scene {
+            case .workday: workday
+            case .weekend: weekend
+            case .trip: trip
+            }
+        }
+        set {
+            switch scene {
+            case .workday: workday = newValue
+            case .weekend: weekend = newValue
+            case .trip: trip = newValue
+            }
+        }
+    }
+}
+
+/// 日历模式的数据，按自然月保存。
+struct MealCalendar: Codable, Hashable {
+    var year: Double
+    var month: Double
+    /// 日期键 -> 当天领的餐次
+    var meals: [String: MealCounts]
+    /// 日期键 -> 是否出差
+    var trips: [String: Bool]
+    /// 日期键 -> 手动改的日期类型
+    var overrides: [String: DayType]
+
+    static func empty() -> MealCalendar {
+        let now = Date()
+        let cal = Foundation.Calendar.current
+        return MealCalendar(
+            year: Double(cal.component(.year, from: now)),
+            month: Double(cal.component(.month, from: now)),
+            meals: [:], trips: [:], overrides: [:]
+        )
+    }
+
+    init(year: Double, month: Double, meals: [String: MealCounts],
+         trips: [String: Bool], overrides: [String: DayType]) {
+        self.year = year
+        self.month = month
+        self.meals = meals
+        self.trips = trips
+        self.overrides = overrides
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        year = (try? c.decode(Double.self, forKey: .year)) ?? MealCalendar.empty().year
+        month = (try? c.decode(Double.self, forKey: .month)) ?? MealCalendar.empty().month
+        meals = (try? c.decode([String: MealCounts].self, forKey: .meals)) ?? [:]
+        trips = (try? c.decode([String: Bool].self, forKey: .trips)) ?? [:]
+        overrides = (try? c.decode([String: DayType].self, forKey: .overrides)) ?? [:]
+    }
+}
+
+struct MealAllowanceInput: Codable, Hashable {
+    /// 直接填餐次 / 按日历填写
+    var entryMode: String
+    var rates: MealRates
+    /// 手填模式下三档各自的餐次
+    var manual: [String: MealCounts]
+    var calendar: MealCalendar
+
+    static let initial = MealAllowanceInput(
+        entryMode: "manual",
+        rates: .initial,
+        manual: [
+            MealScene.workday.rawValue: .zero,
+            MealScene.weekend.rawValue: .zero,
+            MealScene.trip.rawValue: .zero,
+        ],
+        calendar: .empty()
+    )
+
+    func manualCounts(_ scene: MealScene) -> MealCounts {
+        manual[scene.rawValue] ?? .zero
+    }
+
+    mutating func setManualCounts(_ scene: MealScene, _ counts: MealCounts) {
+        manual[scene.rawValue] = counts
+    }
+
+    init(entryMode: String, rates: MealRates,
+         manual: [String: MealCounts], calendar: MealCalendar) {
+        self.entryMode = entryMode
+        self.rates = rates
+        self.manual = manual
+        self.calendar = calendar
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        entryMode = (try? c.decode(String.self, forKey: .entryMode)) ?? "manual"
+        rates = (try? c.decode(MealRates.self, forKey: .rates)) ?? .initial
+        manual = (try? c.decode([String: MealCounts].self, forKey: .manual)) ?? [:]
+        calendar = (try? c.decode(MealCalendar.self, forKey: .calendar)) ?? .empty()
+    }
+}
+
+struct MealSyncSettings: Codable, Hashable {
+    var enabled: Bool
+    var incomeId: String?
+
+    static let initial = MealSyncSettings(enabled: false, incomeId: nil)
+}
+
 // MARK: - 整个 App 的状态
 
 struct SalaryState: Codable {
@@ -276,6 +478,9 @@ struct SalaryState: Codable {
     var bonusTaxMode: String
     var overtime: OvertimeInput
     var overtimeSync: OvertimeSyncSettings
+    /// 加班误餐补贴
+    var mealAllowance: MealAllowanceInput
+    var mealSync: MealSyncSettings
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -294,6 +499,8 @@ struct SalaryState: Codable {
         bonusTaxMode = (try? c.decode(String.self, forKey: .bonusTaxMode)) ?? "separate"
         overtime = (try? c.decode(OvertimeInput.self, forKey: .overtime)) ?? .initial
         overtimeSync = (try? c.decode(OvertimeSyncSettings.self, forKey: .overtimeSync)) ?? .initial
+        mealAllowance = (try? c.decode(MealAllowanceInput.self, forKey: .mealAllowance)) ?? .initial
+        mealSync = (try? c.decode(MealSyncSettings.self, forKey: .mealSync)) ?? .initial
 
         if incomes.isEmpty { incomes = SalaryState.sample.incomes }
     }
@@ -306,7 +513,9 @@ struct SalaryState: Codable {
         months: [MonthRecord] = [], annualBonus: Double = 0,
         bonusTaxMode: String = "separate",
         overtime: OvertimeInput = .initial,
-        overtimeSync: OvertimeSyncSettings = .initial
+        overtimeSync: OvertimeSyncSettings = .initial,
+        mealAllowance: MealAllowanceInput = .initial,
+        mealSync: MealSyncSettings = .initial
     ) {
         self.cityId = cityId
         self.socialBaseMode = socialBaseMode
@@ -322,6 +531,8 @@ struct SalaryState: Codable {
         self.bonusTaxMode = bonusTaxMode
         self.overtime = overtime
         self.overtimeSync = overtimeSync
+        self.mealAllowance = mealAllowance
+        self.mealSync = mealSync
     }
 
     /// 首次启动 / 重置时的示例数据，与 TS 版的 createDefaultState 对齐

@@ -55,7 +55,7 @@ struct RootView: View {
     }
 
     enum Section: String, CaseIterable, Identifiable, Hashable {
-        case income, special, social, ytd, deduction, overtime
+        case income, special, social, ytd, deduction, overtime, meal
 
         var id: String { rawValue }
 
@@ -67,6 +67,7 @@ struct RootView: View {
             case .ytd: "累计数据与年终奖"
             case .deduction: "其他扣除"
             case .overtime: "加班费"
+            case .meal: "误餐补贴"
             }
         }
 
@@ -78,6 +79,7 @@ struct RootView: View {
             case .ytd: "chart.line.uptrend.xyaxis"
             case .deduction: "minus.circle"
             case .overtime: "clock.badge.checkmark"
+            case .meal: "fork.knife"
             }
         }
 
@@ -89,6 +91,7 @@ struct RootView: View {
             case .ytd: "按月记录 · 年终奖"
             case .deduction: "年金 · 请假扣款"
             case .overtime: "1.5 / 2 / 3 倍"
+            case .meal: "工作日 · 周末 · 出差"
             }
         }
     }
@@ -210,6 +213,7 @@ struct RootView: View {
             case .ytd: YtdSectionView()
             case .deduction: DeductionSectionView()
             case .overtime: OvertimeSectionView()
+            case .meal: MealAllowanceSectionView()
             }
         }
         .padding(.bottom, 4)

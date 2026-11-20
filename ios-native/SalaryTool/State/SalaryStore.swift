@@ -18,8 +18,9 @@ final class SalaryStore {
     var state: SalaryState {
         didSet {
             scheduleSave()
-            // 工时 / 基数一变，联动金额跟着重算
+            // 工时 / 基数 / 餐次一变，两个联动金额都跟着重算
             applyOvertimeToIncome()
+            applyMealToIncome()
         }
     }
 
@@ -273,6 +274,99 @@ final class SalaryStore {
             state.overtime.weekendHours = 0
             state.overtime.holidayHours = 0
         }
+    }
+
+    // MARK: - 误餐补贴 <-> 收入项联动
+
+    /// 防止误餐补贴写回收入项时递归。
+    private var syncingMeal = false
+
+    /// 误餐补贴要写入的收入项；没绑定或绑定项被删时返回 nil。
+    ///
+    /// 只认名称**完全等于**「误餐补贴」。和加班费分开找，
+    /// 因为公司一般两笔都发，混在一起就核对不清楚了。
+    func findMealIncome() -> IncomeItem? {
+        if let id = state.mealSync.incomeId,
+           let item = state.incomes.first(where: { $0.id == id }) {
+            return item
+        }
+        return state.incomes.first { $0.label.trimmingCharacters(in: .whitespaces) == "误餐补贴" }
+    }
+
+    /// 确保有一个可写入的「误餐补贴」收入项。
+    @discardableResult
+    func ensureMealIncome() -> IncomeItem {
+        if let existing = findMealIncome() {
+            state.mealSync.incomeId = existing.id
+            return existing
+        }
+        let item = IncomeItem(
+            label: "误餐补贴",
+            amount: 0,
+            // 福利性补贴：不进社保 / 公积金基数，但要计税
+            includeInSocialBase: false,
+            includeInHousingFundBase: false,
+            taxable: true
+        )
+        state.incomes.append(item)
+        state.mealSync.incomeId = item.id
+        return item
+    }
+
+    /// 打开 / 关闭联动。关闭时把金额清零。
+    func setMealSyncEnabled(_ enabled: Bool) {
+        state.mealSync.enabled = enabled
+        if enabled {
+            ensureMealIncome()
+            applyMealToIncome()
+        } else if let target = findMealIncome(),
+                  let index = state.incomes.firstIndex(where: { $0.id == target.id }) {
+            syncingMeal = true
+            state.incomes[index].amount = 0
+            syncingMeal = false
+        }
+    }
+
+    /// 把算出的误餐补贴合计写进目标收入项。
+    private func applyMealToIncome() {
+        guard !syncingMeal, state.mealSync.enabled else { return }
+        syncingMeal = true
+        defer { syncingMeal = false }
+
+        let total = Money.round2(MealAllowanceMath.compute(state.mealAllowance).total)
+
+        if findMealIncome() == nil {
+            ensureMealIncome()
+        }
+        guard let target = findMealIncome(),
+              let index = state.incomes.firstIndex(where: { $0.id == target.id }) else {
+            return
+        }
+        if state.incomes[index].amount != total {
+            state.incomes[index].amount = total
+        }
+    }
+
+    /// 清零餐次：只清当前正在用的录入方式。
+    func resetMealCounts() {
+        if state.mealAllowance.entryMode == "calendar" {
+            state.mealAllowance.calendar.meals = [:]
+            state.mealAllowance.calendar.trips = [:]
+        } else {
+            for scene in MealScene.allCases {
+                state.mealAllowance.setManualCounts(scene, .zero)
+            }
+        }
+    }
+
+    /// 按加班记录补餐次。
+    func suggestMealsFromOvertime() {
+        guard let overtime = state.overtime.calendar else { return }
+        let meals = MealAllowanceMath.suggestFromOvertime(
+            overtime: overtime,
+            target: state.mealAllowance.calendar
+        )
+        state.mealAllowance.calendar.meals = meals
     }
 
     /// 日历改了之后，三档合计跟着更新。
