@@ -4,6 +4,7 @@ import { CITY_POLICIES, findCityPolicy } from "@shared/cityPolicies";
 import type { SalaryResult } from "@shared/calculator";
 import { clampBase, suggestHousingFundBase, suggestSocialBase } from "@shared/calculator";
 import { calcOvertime } from "@shared/overtime";
+import { calcMealAllowance } from "@shared/mealAllowance";
 import {
   DEDUCTION_PRESETS,
   INCOME_PRESETS,
@@ -131,6 +132,74 @@ watchEffect(() => {
   if (target.amount !== total) target.amount = total;
 });
 
+// —— 误餐补贴 ↔ 收入项联动 ——
+
+/**
+ * 误餐补贴要写入的收入项。
+ *
+ * 和加班费分开找：公司一般会同时发「加班费」和「误餐补贴」两笔，
+ * 混在一起就没法核对了。只认「误餐补贴」这个名字（或用户显式绑定的 id）。
+ */
+export function findMealIncome(): IncomeItem | undefined {
+  const id = state.mealSync.incomeId;
+  if (id) return state.incomes.find((item) => item.id === id);
+  return state.incomes.find((item) => item.label.trim() === "误餐补贴");
+}
+
+/** 打开联动时确保有一个可写入的「误餐补贴」收入项。 */
+export function ensureMealIncome(): IncomeItem {
+  const existing = findMealIncome();
+  if (existing) {
+    state.mealSync.incomeId = existing.id;
+    return existing;
+  }
+  const id = uid("income");
+  const item: IncomeItem = {
+    id,
+    label: "误餐补贴",
+    amount: 0,
+    // 误餐补贴属于福利性补贴，一般不并入社保 / 公积金基数，但要计税
+    includeInSocialBase: false,
+    includeInHousingFundBase: false,
+    taxable: true,
+  };
+  state.incomes.push(item);
+  state.mealSync.incomeId = id;
+  return item;
+}
+
+export function setMealSyncEnabled(enabled: boolean): void {
+  state.mealSync.enabled = enabled;
+  if (enabled) {
+    ensureMealIncome();
+  } else {
+    const target = findMealIncome();
+    if (target) target.amount = 0;
+  }
+}
+
+/** 把当前误餐补贴合计写进目标收入项。 */
+export function pushMealToIncome(): void {
+  const target = findMealIncome();
+  if (!target) return;
+  const total = round2(calcMealAllowance(state.mealAllowance).total);
+  if (target.amount !== total) target.amount = total;
+}
+
+// 联动打开时，餐次或单价一变就同步金额
+watchEffect(() => {
+  if (!state.mealSync.enabled) return;
+  const target = state.mealSync.incomeId
+    ? state.incomes.find((item) => item.id === state.mealSync.incomeId)
+    : undefined;
+  if (!target) {
+    ensureMealIncome();
+    return;
+  }
+  const total = round2(calcMealAllowance(state.mealAllowance).total);
+  if (target.amount !== total) target.amount = total;
+});
+
 // —— 动作 ——
 
 export function applyCity(cityId: string): void {
@@ -221,6 +290,8 @@ export function applyState(next: SalaryState): void {
   state.bonusTaxMode = next.bonusTaxMode;
   Object.assign(state.overtime, next.overtime);
   Object.assign(state.overtimeSync, next.overtimeSync);
+  Object.assign(state.mealAllowance, next.mealAllowance);
+  Object.assign(state.mealSync, next.mealSync);
 }
 
 /**

@@ -20,6 +20,8 @@ import type { MonthRecord } from "./history";
 import { computeYtdFromMonths, findMissingMonths } from "./history";
 import type { OvertimeInput, OvertimeSyncSettings } from "./overtime";
 import { createDefaultOvertime, createDefaultOvertimeSync } from "./overtime";
+import type { MealAllowanceInput, MealSyncSettings } from "./mealAllowance";
+import { createDefaultMealAllowance, createDefaultMealSync } from "./mealAllowance";
 
 /**
  * 基数模式：auto 按收入自动推算，manual 手动填写。
@@ -49,6 +51,10 @@ export interface SalaryState {
   overtime: OvertimeInput;
   /** 加班费与收入项的联动设置 */
   overtimeSync: OvertimeSyncSettings;
+  /** 加班误餐补贴的输入，持久化保存 */
+  mealAllowance: MealAllowanceInput;
+  /** 误餐补贴与收入项的联动设置 */
+  mealSync: MealSyncSettings;
 }
 
 let seq = 0;
@@ -122,6 +128,8 @@ export function createDefaultState(): SalaryState {
     bonusTaxMode: "separate",
     overtime: createDefaultOvertime(),
     overtimeSync: createDefaultOvertimeSync(),
+    mealAllowance: createDefaultMealAllowance(),
+    mealSync: createDefaultMealSync(),
   };
 }
 

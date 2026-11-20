@@ -9,6 +9,13 @@ import type { DayType } from "./calendar";
 import { MAX_YEAR, MIN_YEAR } from "./calendar";
 import type { OvertimeCalendar, OvertimeEntryMode, OvertimeInput, OvertimeSyncSettings } from "./overtime";
 import { createDefaultCalendar, createDefaultOvertime, createDefaultOvertimeSync } from "./overtime";
+import type { MealAllowanceInput, MealCalendar, MealCounts, MealRates, MealScene, MealSyncSettings } from "./mealAllowance";
+import {
+  createDefaultMealAllowance,
+  createDefaultMealSync,
+  emptyMealCounts,
+  MEAL_SCENES,
+} from "./mealAllowance";
 import { round2, toAmount, toNonNegative } from "./money";
 
 /**
@@ -145,6 +152,101 @@ function normalizeOvertimeSync(raw: unknown): OvertimeSyncSettings {
   };
 }
 
+/** 把任意值整理成长度为 3 的餐次计数（0 或正整数）。 */
+function normalizeMealCounts(raw: unknown, fallback: MealCounts): MealCounts {
+  if (!raw || typeof raw !== "object") return { ...fallback };
+  const item = raw as Record<string, unknown>;
+  return {
+    breakfast: round2(toNonNegative(item.breakfast ?? fallback.breakfast)),
+    lunch: round2(toNonNegative(item.lunch ?? fallback.lunch)),
+    dinner: round2(toNonNegative(item.dinner ?? fallback.dinner)),
+  };
+}
+
+function normalizeMealRates(raw: unknown): MealRates {
+  const base = createDefaultMealAllowance().rates;
+  if (!raw || typeof raw !== "object") return base;
+  const item = raw as Record<string, unknown>;
+  return {
+    workday: normalizeMealCounts(item.workday, base.workday),
+    weekend: normalizeMealCounts(item.weekend, base.weekend),
+    trip: normalizeMealCounts(item.trip, base.trip),
+  };
+}
+
+function normalizeMealCalendar(raw: unknown): MealCalendar {
+  const base = createDefaultMealAllowance().calendar;
+  if (!raw || typeof raw !== "object") return base;
+  const item = raw as Record<string, unknown>;
+
+  const meals: Record<string, MealCounts> = {};
+  if (item.meals && typeof item.meals === "object") {
+    for (const [key, value] of Object.entries(item.meals as Record<string, unknown>)) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) continue;
+      const counts = normalizeMealCounts(value, emptyMealCounts());
+      // 一顿都没吃的条目不保留，避免日历里堆满空记录
+      if (counts.breakfast + counts.lunch + counts.dinner > 0) meals[key] = counts;
+    }
+  }
+
+  const trips: Record<string, boolean> = {};
+  if (item.trips && typeof item.trips === "object") {
+    for (const [key, value] of Object.entries(item.trips as Record<string, unknown>)) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) continue;
+      if (value === true) trips[key] = true;
+    }
+  }
+
+  const overrides: Record<string, DayType> = {};
+  if (item.overrides && typeof item.overrides === "object") {
+    for (const [key, value] of Object.entries(item.overrides as Record<string, unknown>)) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) continue;
+      if (value === "workday" || value === "rest" || value === "holiday") {
+        overrides[key] = value;
+      }
+    }
+  }
+
+  return {
+    year: Math.min(MAX_YEAR, Math.max(MIN_YEAR, Math.round(pickNumber(item.year, base.year)))),
+    month: Math.min(12, Math.max(1, Math.round(pickNumber(item.month, base.month)))),
+    meals,
+    trips,
+    overrides,
+  };
+}
+
+function normalizeMealAllowance(raw: unknown): MealAllowanceInput {
+  const base = createDefaultMealAllowance();
+  if (!raw || typeof raw !== "object") return base;
+  const item = raw as Record<string, unknown>;
+
+  const manualRaw = (item.manual && typeof item.manual === "object"
+    ? item.manual
+    : {}) as Record<string, unknown>;
+  const manual = {} as Record<MealScene, MealCounts>;
+  for (const scene of MEAL_SCENES) {
+    manual[scene] = normalizeMealCounts(manualRaw[scene], emptyMealCounts());
+  }
+
+  return {
+    entryMode: item.entryMode === "calendar" ? "calendar" : "manual",
+    rates: normalizeMealRates(item.rates),
+    manual,
+    calendar: normalizeMealCalendar(item.calendar),
+  };
+}
+
+function normalizeMealSync(raw: unknown): MealSyncSettings {
+  const base = createDefaultMealSync();
+  if (!raw || typeof raw !== "object") return base;
+  const item = raw as Record<string, unknown>;
+  return {
+    enabled: Boolean(item.enabled),
+    incomeId: typeof item.incomeId === "string" && item.incomeId ? item.incomeId : null,
+  };
+}
+
 /**
  * 把任意来源的数据整理成完整的 SalaryState。
  *
@@ -244,6 +346,8 @@ export function normalizeState(input: unknown): SalaryState {
     bonusTaxMode: raw.bonusTaxMode === "combined" ? "combined" : "separate",
     overtime: normalizeOvertime(raw.overtime),
     overtimeSync: normalizeOvertimeSync(raw.overtimeSync),
+    mealAllowance: normalizeMealAllowance(raw.mealAllowance),
+    mealSync: normalizeMealSync(raw.mealSync),
   };
 }
 

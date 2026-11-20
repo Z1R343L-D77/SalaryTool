@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import DeductionSection from "./components/DeductionSection.vue";
 import ImportDialog from "./components/ImportDialog.vue";
 import IncomeSection from "./components/IncomeSection.vue";
+import MealAllowanceSection from "./components/MealAllowanceSection.vue";
 import OvertimeSection from "./components/OvertimeSection.vue";
 import ResultPanel from "./components/ResultPanel.vue";
 import SettingsDialog from "./components/SettingsDialog.vue";
@@ -48,6 +49,7 @@ const SECTIONS = [
   { id: "ytd", label: "累计数据", hint: "按月记录 · 年终奖" },
   { id: "deduction", label: "其他扣除", hint: "年金 · 请假扣款" },
   { id: "overtime", label: "加班费", hint: "1.5 / 2 / 3 倍" },
+  { id: "meal", label: "误餐补贴", hint: "工作日 · 周末 · 出差" },
 ] as const;
 
 type SectionId = (typeof SECTIONS)[number]["id"];
@@ -131,6 +133,7 @@ const badges = computed<Record<SectionId, string>>(() => {
     ytd: `第 ${state.ytd.monthIndex} 月`,
     deduction: state.deductions.length ? `${state.deductions.length} 项` : "—",
     overtime: "—",
+    meal: "—",
   };
 });
 
@@ -268,7 +271,8 @@ async function onMaximize(): Promise<void> {
             @add="addDeduction"
             @remove="removeDeduction"
           />
-          <OvertimeSection v-else :state="state" />
+          <OvertimeSection v-else-if="activeSection === 'overtime'" :state="state" />
+          <MealAllowanceSection v-else :state="state" />
         </div>
       </main>
 
