@@ -41,8 +41,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.salarytool.ios
         PRODUCT_NAME: SalaryTool
         INFOPLIST_FILE: SalaryTool/Info.plist
-        MARKETING_VERSION: "0.3.20261117"
-        CURRENT_PROJECT_VERSION: "20261117"
+        MARKETING_VERSION: "0.4.20261120"
+        CURRENT_PROJECT_VERSION: "20261120"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1"          # 只做 iPhone
         ENABLE_PREVIEWS: YES
