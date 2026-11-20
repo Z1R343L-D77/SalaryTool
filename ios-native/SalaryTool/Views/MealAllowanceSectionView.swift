@@ -176,7 +176,11 @@ struct MealAllowanceSectionView: View {
     // MARK: 日历模式
 
     private var calendarBlock: some View {
-        VStack(spacing: 10) {
+        // @Bindable 必须在**使用 $store 的这个作用域**里声明：
+        // body 里的局部变量传不到另一个计算属性。
+        @Bindable var store = store
+
+        return VStack(spacing: 10) {
             HStack {
                 Spacer()
                 Button {
