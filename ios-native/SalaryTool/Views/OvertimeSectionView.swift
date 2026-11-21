@@ -18,6 +18,8 @@ struct OvertimeSectionView: View {
         ("holiday", "节假日", 3.0, "法定节假日 3 倍"),
     ]
 
+    @State private var showCalendar = false
+
     private var overtime: OvertimeInput { store.state.overtime }
     private var hourlyBase: Double { OvertimeMath.hourlyBase(overtime) }
     private var totalPay: Double { OvertimeMath.totalPay(overtime) }
@@ -65,7 +67,15 @@ struct OvertimeSectionView: View {
                 entryModePicker
 
                 if isCalendar {
-                    OvertimeCalendarView()
+                    // 日历本身只做入口：主界面放不下 7 列格子（每格 55pt，
+                    // 可点区域只有 16pt 左右），点进去才是全屏日历。
+                    CalendarEntryCard(
+                        monthLabel: calendarMonthLabel,
+                        filledDays: calendarFilledDays,
+                        amount: calendarTotalPay
+                    ) {
+                        showCalendar = true
+                    }
                 } else {
                     tierCards
                 }
@@ -74,6 +84,9 @@ struct OvertimeSectionView: View {
                 syncBlock
                 rulesBlock
             }
+        }
+        .fullScreenCover(isPresented: $showCalendar) {
+            OvertimeCalendarScreen()
         }
         // 跟随基本工资：收入项里"基本工资"一改，基数跟着走
         .onChange(of: basicSalary) { _, newValue in
@@ -85,6 +98,24 @@ struct OvertimeSectionView: View {
                 dailyHours: store.state.overtime.dailyHours
             )
         }
+    }
+
+    // MARK: 日历入口摘要
+
+    private var calendarMonthLabel: String {
+        guard let calendar = overtime.calendar else { return "日历" }
+        return "\(Int(calendar.year)) 年 \(Int(calendar.month)) 月"
+    }
+
+    /// 本月填了工时（含出差 / 请假）的天数
+    private var calendarFilledDays: Int {
+        guard let hours = overtime.calendar?.hours else { return 0 }
+        return hours.values.filter { $0 > 0 }.count
+    }
+
+    /// 本月按日历算出的加班费
+    private var calendarTotalPay: Double {
+        OvertimeMath.totalPay(overtime)
     }
 
     // MARK: 同步到收入项（+ 清零工时）

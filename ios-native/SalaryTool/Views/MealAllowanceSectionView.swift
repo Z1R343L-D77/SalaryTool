@@ -15,6 +15,8 @@ import SwiftUI
 struct MealAllowanceSectionView: View {
     @Environment(SalaryStore.self) private var store
 
+    @State private var showCalendar = false
+
     private var input: MealAllowanceInput { store.state.mealAllowance }
     private var result: MealAllowanceResult { MealAllowanceMath.compute(input) }
     private var isCalendar: Bool { input.entryMode == "calendar" }
@@ -176,11 +178,16 @@ struct MealAllowanceSectionView: View {
     // MARK: 日历模式
 
     private var calendarBlock: some View {
-        // @Bindable 必须在**使用 $store 的这个作用域**里声明：
-        // body 里的局部变量传不到另一个计算属性。
-        @Bindable var store = store
+        VStack(spacing: 10) {
+            // 日历本身只做入口：主界面放不下 7 列 × 三餐按钮
+            CalendarEntryCard(
+                monthLabel: calendarMonthLabel,
+                filledDays: calendarFilledDays,
+                amount: result.total
+            ) {
+                showCalendar = true
+            }
 
-        return VStack(spacing: 10) {
             HStack {
                 Spacer()
                 Button {
@@ -193,12 +200,21 @@ struct MealAllowanceSectionView: View {
                 .controlSize(.small)
                 .disabled(overtimeHoursTotal <= 0)
             }
-
-            MealCalendarView(
-                calendar: $store.state.mealAllowance.calendar,
-                rates: store.state.mealAllowance.rates
-            )
         }
+        .fullScreenCover(isPresented: $showCalendar) {
+            MealCalendarScreen()
+        }
+    }
+
+    // MARK: 日历入口摘要
+
+    private var calendarMonthLabel: String {
+        let calendar = input.calendar
+        return "\(Int(calendar.year)) 年 \(Int(calendar.month)) 月"
+    }
+
+    private var calendarFilledDays: Int {
+        input.calendar.meals.values.filter { $0.total > 0 }.count
     }
 
     // MARK: 合计
