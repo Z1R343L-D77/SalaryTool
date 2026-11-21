@@ -47,7 +47,7 @@
 | | Windows 桌面版 | iPhone 版 |
 | --- | --- | --- |
 | 技术栈 | Tauri 2 · Vue 3 · TypeScript | SwiftUI（原生） |
-| 版本 | `0.3.20261120` | `0.4.20261120` |
+| 版本 | `0.3.20261120` | `0.4.20261121` |
 | 特点 | 三列布局，一次看全所有参数 | 天气 App 式布局，玻璃质感 |
 | 计算逻辑 | `shared/`（TS） | `Models/Calculator.swift`（Swift 重写） |
 
